@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpFromLine } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
-import type { Transaction, ItemCondition, PaymentMethod } from "@/data/types";
+import type { Transaction, ItemCondition, PaymentMethod, GuaranteeStatus } from "@/data/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
@@ -84,6 +84,10 @@ function KeluarCard({
     t.deposit_received_method || "Transfer",
   );
   const [depositNote, setDepositNote] = React.useState(t.deposit_received_note || "");
+  const [nomorDokumen, setNomorDokumen] = React.useState(t.nomor_dokumen || "");
+  const [fotoDokumen, setFotoDokumen] = React.useState(t.foto_dokumen || []);
+  const butuhDeposit = ["Deposit Uang", "Deposit + Dokumen"].includes(t.jenis_jaminan);
+  const butuhDokumen = ["Dokumen", "Deposit + Dokumen"].includes(t.jenis_jaminan);
 
   function submit() {
     const invalidLine = lines.find(
@@ -98,15 +102,33 @@ function KeluarCard({
       return;
     }
 
+    if (butuhDeposit && depositNominal <= 0) {
+      toast.error("Nominal jaminan deposit wajib diisi saat serah terima keluar.");
+      return;
+    }
+
+    if (butuhDokumen && (!nomorDokumen || !fotoDokumen.length)) {
+      toast.error("Nomor dokumen dan foto dokumen wajib diisi untuk jaminan dokumen.");
+      return;
+    }
+
+    const statusJaminan: GuaranteeStatus =
+      (butuhDeposit ? depositNominal > 0 : true) && (butuhDokumen ? !!nomorDokumen : true)
+        ? "Diterima"
+        : "Belum Diterima";
+
     onSubmit({
       ...t,
       items: lines,
       deposit_required: t.deposit_required,
-      deposit_received: depositNominal,
-      deposit_received_date: toISODate(new Date()),
-      deposit_status: depositNominal > 0 ? "Diterima" : "Belum Diterima",
+      deposit_received: butuhDeposit ? depositNominal : 0,
+      deposit_received_date: butuhDeposit ? toISODate(new Date()) : null,
+      deposit_status: butuhDeposit && depositNominal > 0 ? "Diterima" : "Belum Diterima",
       deposit_received_method: depositMethod,
       deposit_received_note: depositNote,
+      nomor_dokumen: butuhDokumen ? nomorDokumen : "",
+      foto_dokumen: butuhDokumen ? fotoDokumen : [],
+      status_jaminan: statusJaminan,
       tanggal_keluar: toISODate(new Date()),
       status: "Sedang Disewa",
     });
@@ -207,46 +229,79 @@ function KeluarCard({
         </div>
 
         <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-semibold">Deposit</p>
+          <p className="text-sm font-semibold">Jaminan</p>
           <p className="text-xs text-muted-foreground">
-            Deposit adalah jaminan barang dan dicatat saat serah terima keluar.
+            Data jaminan diambil dari transaksi dan diterima saat serah terima keluar.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Deposit Wajib</Label>
-              <Input value={formatRupiah(t.deposit_required)} className="h-9" disabled />
+              <Label className="text-xs text-muted-foreground">Jenis Jaminan</Label>
+              <Input value={t.jenis_jaminan} className="h-9" disabled />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Nominal Deposit Diterima</Label>
-              <CurrencyInput value={depositNominal} onChange={setDepositNominal} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
-              <Select
-                value={depositMethod}
-                onValueChange={(value) => setDepositMethod(value as PaymentMethod)}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["Tunai", "Transfer", "QRIS", "Kartu"].map((metode) => (
-                    <SelectItem key={metode} value={metode}>
-                      {metode}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Catatan Deposit</Label>
-              <Input
-                className="h-9"
-                value={depositNote}
-                placeholder="opsional"
-                onChange={(e) => setDepositNote(e.target.value)}
-              />
-            </div>
+            {butuhDeposit && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Nominal Jaminan</Label>
+                  <Input value={formatRupiah(t.nominal_jaminan)} className="h-9" disabled />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Nominal Diterima</Label>
+                  <CurrencyInput value={depositNominal} onChange={setDepositNominal} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
+                  <Select
+                    value={depositMethod}
+                    onValueChange={(value) => setDepositMethod(value as PaymentMethod)}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Tunai", "Transfer", "QRIS", "Kartu"].map((metode) => (
+                        <SelectItem key={metode} value={metode}>
+                          {metode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Catatan Deposit</Label>
+                  <Input
+                    className="h-9"
+                    value={depositNote}
+                    placeholder="opsional"
+                    onChange={(e) => setDepositNote(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+            {butuhDokumen && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Jenis Dokumen</Label>
+                  <Input value={t.jenis_dokumen} className="h-9" disabled />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Nomor Dokumen</Label>
+                  <Input
+                    className="h-9"
+                    value={nomorDokumen}
+                    placeholder="Nomor dokumen"
+                    onChange={(e) => setNomorDokumen(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <ImageUploader
+                    label="Upload foto dokumen"
+                    multiple
+                    value={fotoDokumen}
+                    onChange={(value) => setFotoDokumen(value as string[])}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 

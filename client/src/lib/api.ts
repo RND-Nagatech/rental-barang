@@ -105,6 +105,12 @@ type ApiRental = MongoDoc & {
   deposit_received_method?: string | null;
   deposit_received_note?: string | null;
   deposit_status?: string;
+  jenis_jaminan?: string;
+  nominal_jaminan?: number;
+  jenis_dokumen?: string | null;
+  nomor_dokumen?: string | null;
+  foto_dokumen?: string[];
+  status_jaminan?: string;
   total_sewa?: number;
   total_denda?: number;
   total_bayar?: number;
@@ -138,6 +144,9 @@ export type Pengaturan = {
   alamat: string;
   denda_keterlambatan_default: number;
   deposit_minimum_default: number;
+  jenis_jaminan_default: string;
+  nominal_deposit_default: number;
+  jenis_dokumen_default: string;
   notifikasi_pengembalian: boolean;
   tandai_overdue_otomatis: boolean;
 };
@@ -247,6 +256,76 @@ const statusDeposit = (status?: string) => {
   };
 
   return map[status || ""] || "Belum Diterima";
+};
+
+const jenisJaminan = (jenis?: string): Transaction["jenis_jaminan"] => {
+  const map: Record<string, Transaction["jenis_jaminan"]> = {
+    deposit_uang: "Deposit Uang",
+    dokumen: "Dokumen",
+    deposit_dokumen: "Deposit + Dokumen",
+    tanpa_jaminan: "Tanpa Jaminan",
+  };
+
+  return map[jenis || ""] || "Deposit Uang";
+};
+
+const jenisJaminanApi = (jenis: Transaction["jenis_jaminan"]) => {
+  const map: Record<Transaction["jenis_jaminan"], string> = {
+    "Deposit Uang": "deposit_uang",
+    Dokumen: "dokumen",
+    "Deposit + Dokumen": "deposit_dokumen",
+    "Tanpa Jaminan": "tanpa_jaminan",
+  };
+
+  return map[jenis] || "deposit_uang";
+};
+
+const jenisDokumen = (jenis?: string): Transaction["jenis_dokumen"] => {
+  const map: Record<string, Transaction["jenis_dokumen"]> = {
+    ktp: "KTP",
+    sim: "SIM",
+    paspor: "Paspor",
+    kartu_mahasiswa: "Kartu Mahasiswa",
+    lainnya: "Lainnya",
+  };
+
+  return map[jenis || ""] || "KTP";
+};
+
+const jenisDokumenApi = (jenis: Transaction["jenis_dokumen"]) => {
+  const map: Record<Transaction["jenis_dokumen"], string> = {
+    KTP: "ktp",
+    SIM: "sim",
+    Paspor: "paspor",
+    "Kartu Mahasiswa": "kartu_mahasiswa",
+    Lainnya: "lainnya",
+  };
+
+  return map[jenis] || "ktp";
+};
+
+const statusJaminan = (status?: string): Transaction["status_jaminan"] => {
+  const map: Record<string, Transaction["status_jaminan"]> = {
+    belum_diterima: "Belum Diterima",
+    diterima: "Diterima",
+    dikembalikan: "Dikembalikan",
+    dipotong: "Dipotong",
+    ditahan: "Ditahan",
+  };
+
+  return map[status || ""] || "Belum Diterima";
+};
+
+const statusJaminanApi = (status: Transaction["status_jaminan"]) => {
+  const map: Record<Transaction["status_jaminan"], string> = {
+    "Belum Diterima": "belum_diterima",
+    Diterima: "diterima",
+    Dikembalikan: "dikembalikan",
+    Dipotong: "dipotong",
+    Ditahan: "ditahan",
+  };
+
+  return map[status] || "belum_diterima";
 };
 
 const metodePembayaran = (metode?: string): Transaction["deposit_received_method"] => {
@@ -364,6 +443,12 @@ export const mapRental = (rental: ApiRental, customers: Customer[], items: Item[
       };
     }),
     diskon: Number(rental.diskon || 0),
+    jenis_jaminan: jenisJaminan(rental.jenis_jaminan),
+    nominal_jaminan: Number(rental.nominal_jaminan ?? rental.deposit_required ?? rental.deposit ?? 0),
+    jenis_dokumen: jenisDokumen(rental.jenis_dokumen || undefined),
+    nomor_dokumen: rental.nomor_dokumen || "",
+    foto_dokumen: Array.isArray(rental.foto_dokumen) ? rental.foto_dokumen : [],
+    status_jaminan: statusJaminan(rental.status_jaminan || rental.deposit_status),
     deposit_required: Number(rental.deposit_required ?? rental.deposit ?? 0),
     deposit_received: Number(rental.deposit_received || 0),
     deposit_received_date: dateOnly(rental.deposit_received_date) || null,
@@ -520,6 +605,9 @@ export const rentalApi = {
           tanggal_mulai: transaction.tanggal_mulai,
           tanggal_rencana_kembali: transaction.tanggal_rencana_kembali,
           diskon: transaction.diskon,
+          jenis_jaminan: jenisJaminanApi(transaction.jenis_jaminan),
+          nominal_jaminan: transaction.nominal_jaminan,
+          jenis_dokumen: jenisDokumenApi(transaction.jenis_dokumen),
           deposit_required: transaction.deposit_required,
           total_bayar: transaction.nominal_bayar ?? transaction.terbayar,
           nominal_bayar: transaction.nominal_bayar ?? transaction.terbayar,
@@ -561,6 +649,12 @@ export const rentalApi = {
           tanggal_keluar: transaction.tanggal_keluar,
           tanggal_kembali: transaction.tanggal_kembali,
           diskon: transaction.diskon,
+          jenis_jaminan: jenisJaminanApi(transaction.jenis_jaminan),
+          nominal_jaminan: transaction.nominal_jaminan,
+          jenis_dokumen: jenisDokumenApi(transaction.jenis_dokumen),
+          nomor_dokumen: transaction.nomor_dokumen,
+          foto_dokumen: transaction.foto_dokumen || [],
+          status_jaminan: statusJaminanApi(transaction.status_jaminan),
           deposit_required: transaction.deposit_required,
           deposit_received: transaction.deposit_received,
           deposit_received_date: transaction.deposit_received_date,

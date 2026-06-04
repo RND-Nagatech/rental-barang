@@ -94,6 +94,35 @@ const rentalSchema = new mongoose.Schema(
       enum: ["belum_diterima", "diterima", "dikembalikan", "dipotong"],
       default: "belum_diterima",
     },
+    jenis_jaminan: {
+      type: String,
+      enum: ["deposit_uang", "dokumen", "deposit_dokumen", "tanpa_jaminan"],
+      default: "deposit_uang",
+    },
+    nominal_jaminan: {
+      type: Number,
+      min: [0, "Nominal jaminan tidak boleh kurang dari 0"],
+      default: 0,
+    },
+    jenis_dokumen: {
+      type: String,
+      enum: ["ktp", "sim", "paspor", "kartu_mahasiswa", "lainnya"],
+      default: null,
+    },
+    nomor_dokumen: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    foto_dokumen: {
+      type: [String],
+      default: [],
+    },
+    status_jaminan: {
+      type: String,
+      enum: ["belum_diterima", "diterima", "dikembalikan", "dipotong", "ditahan"],
+      default: "belum_diterima",
+    },
     total_sewa: {
       type: Number,
       min: [0, "Total sewa tidak boleh kurang dari 0"],

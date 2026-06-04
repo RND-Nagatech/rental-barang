@@ -10,6 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/pengaturan")({
   head: () => ({ meta: [{ title: "Pengaturan — Rentory" }] }),
@@ -22,6 +29,8 @@ function Page() {
   const [alamat, setAlamat] = React.useState("Jl. Operasional No. 1, Jakarta");
   const [denda, setDenda] = React.useState(25000);
   const [deposit, setDeposit] = React.useState(100000);
+  const [jenisJaminan, setJenisJaminan] = React.useState("deposit_uang");
+  const [jenisDokumen, setJenisDokumen] = React.useState("ktp");
   const [notif, setNotif] = React.useState(true);
   const [autoOverdue, setAutoOverdue] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -34,7 +43,9 @@ function Page() {
         setTelepon(data.telepon);
         setAlamat(data.alamat);
         setDenda(data.denda_keterlambatan_default);
-        setDeposit(data.deposit_minimum_default);
+        setDeposit(data.nominal_deposit_default ?? data.deposit_minimum_default);
+        setJenisJaminan(data.jenis_jaminan_default || "deposit_uang");
+        setJenisDokumen(data.jenis_dokumen_default || "ktp");
         setNotif(data.notifikasi_pengembalian);
         setAutoOverdue(data.tandai_overdue_otomatis);
       })
@@ -53,6 +64,9 @@ function Page() {
         alamat,
         denda_keterlambatan_default: denda,
         deposit_minimum_default: deposit,
+        jenis_jaminan_default: jenisJaminan,
+        nominal_deposit_default: deposit,
+        jenis_dokumen_default: jenisDokumen,
         notifikasi_pengembalian: notif,
         tandai_overdue_otomatis: autoOverdue,
       });
@@ -108,9 +122,45 @@ function Page() {
               </Label>
               <CurrencyInput value={denda} onChange={setDenda} />
             </div>
+            <div className="border-t" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Pengaturan Jaminan</p>
+              <p className="text-xs text-muted-foreground">
+                Atur nilai default jaminan untuk transaksi baru.
+              </p>
+            </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Deposit Minimum Default</Label>
+              <Label className="text-xs text-muted-foreground">Jenis Jaminan Default</Label>
+              <Select value={jenisJaminan} onValueChange={setJenisJaminan}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="deposit_uang">Deposit Uang</SelectItem>
+                  <SelectItem value="dokumen">Dokumen</SelectItem>
+                  <SelectItem value="deposit_dokumen">Deposit + Dokumen</SelectItem>
+                  <SelectItem value="tanpa_jaminan">Tanpa Jaminan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nominal Deposit Default</Label>
               <CurrencyInput value={deposit} onChange={setDeposit} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Jenis Dokumen Default</Label>
+              <Select value={jenisDokumen} onValueChange={setJenisDokumen}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ktp">KTP</SelectItem>
+                  <SelectItem value="sim">SIM</SelectItem>
+                  <SelectItem value="paspor">Paspor</SelectItem>
+                  <SelectItem value="kartu_mahasiswa">Kartu Mahasiswa</SelectItem>
+                  <SelectItem value="lainnya">Lainnya</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

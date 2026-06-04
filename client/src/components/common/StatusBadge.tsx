@@ -31,6 +31,7 @@ const statusTone: Record<string, Tone> = {
   Diterima: "info",
   Dikembalikan: "success",
   Dipotong: "warning",
+  Ditahan: "danger",
   // Barang
   Tersedia: "success",
   "Disewa Sebagian": "warning",

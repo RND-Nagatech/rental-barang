@@ -93,16 +93,31 @@ function KembaliForm({
   );
   const [biayaKerusakan, setBiayaKerusakan] = React.useState(0);
   const [biayaKehilangan, setBiayaKehilangan] = React.useState(0);
+  const [statusDokumen, setStatusDokumen] = React.useState<"Dikembalikan" | "Ditahan">(
+    "Dikembalikan",
+  );
 
+  const butuhDeposit = ["Deposit Uang", "Deposit + Dokumen"].includes(t.jenis_jaminan);
+  const butuhDokumen = ["Dokumen", "Deposit + Dokumen"].includes(t.jenis_jaminan);
   const dendaTerlambat = t.items.reduce((s, l) => s + getDenda(l.itemId) * l.qty, 0) * lateDays;
   const totalDenda = dendaTerlambat + biayaKerusakan + biayaKehilangan;
   const total = txTotal(t);
   const sisaSebelumDeposit = Math.max(0, total + totalDenda - t.terbayar);
   const depositDiterima = Number(t.deposit_received || 0);
-  const totalPotongan = Math.min(depositDiterima, totalDenda);
+  const totalPotongan = butuhDeposit ? Math.min(depositDiterima, totalDenda) : 0;
   const depositRefund = Math.max(0, depositDiterima - totalPotongan);
   const sisaTagihan = Math.max(0, sisaSebelumDeposit - totalPotongan);
-  const depositStatus = depositDiterima <= 0 ? "Belum Diterima" : depositRefund > 0 ? "Dikembalikan" : "Dipotong";
+  const statusDeposit =
+    depositDiterima <= 0 ? "Belum Diterima" : depositRefund > 0 ? "Dikembalikan" : "Dipotong";
+  const statusJaminanFinal = butuhDokumen
+    ? statusDokumen === "Ditahan"
+      ? "Ditahan"
+      : butuhDeposit
+        ? statusDeposit
+        : "Dikembalikan"
+    : butuhDeposit
+      ? statusDeposit
+      : "Belum Diterima";
 
   function finish() {
     onDone({
@@ -110,7 +125,8 @@ function KembaliForm({
       items: lines,
       tanggal_kembali: toISODate(new Date()),
       status: "Selesai",
-      deposit_status: depositStatus,
+      status_jaminan: statusJaminanFinal,
+      deposit_status: statusDeposit,
       dendaKeterlambatan: dendaTerlambat,
       dendaKerusakan: biayaKerusakan,
       dendaKehilangan: biayaKehilangan,
@@ -250,9 +266,37 @@ function KembaliForm({
           </div>
         </div>
 
+        <div className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
+          <p className="font-semibold">Data Jaminan Diterima</p>
+          <Row label="Jenis Jaminan" value={t.jenis_jaminan} />
+          {butuhDeposit && <Row label="Deposit Diterima" value={formatRupiah(depositDiterima)} />}
+          {butuhDokumen && (
+            <>
+              <Row label="Jenis Dokumen" value={t.jenis_dokumen} />
+              <Row label="Nomor Dokumen" value={t.nomor_dokumen || "-"} />
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Status Pengembalian Dokumen</Label>
+                <Select
+                  value={statusDokumen}
+                  onValueChange={(value) => setStatusDokumen(value as "Dikembalikan" | "Ditahan")}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Dikembalikan">Dikembalikan</SelectItem>
+                    <SelectItem value="Ditahan">Ditahan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
-          <Row label="Deposit Diterima" value={formatRupiah(depositDiterima)} />
-          <Row label="Status Deposit" value={depositStatus} />
+          <Row label="Status Jaminan" value={statusJaminanFinal} />
+          {butuhDeposit && <Row label="Deposit Diterima" value={formatRupiah(depositDiterima)} />}
+          {butuhDeposit && <Row label="Status Deposit" value={statusDeposit} />}
           <div className="my-1 border-t" />
           <Row
             label={`Denda Keterlambatan (${lateDays} hari)`}
@@ -261,10 +305,10 @@ function KembaliForm({
           <Row label="Denda Kerusakan" value={formatRupiah(biayaKerusakan)} />
           <Row label="Denda Barang Hilang" value={formatRupiah(biayaKehilangan)} />
           <Row label="Total Denda" value={formatRupiah(totalDenda)} bold />
-          <div className="my-1 border-t" />
-          <Row label="Potongan Deposit" value={`- ${formatRupiah(totalPotongan)}`} muted />
-          <Row label="Deposit Dikembalikan" value={formatRupiah(depositRefund)} muted />
-          <div className="my-1 border-t" />
+          {butuhDeposit && <div className="my-1 border-t" />}
+          {butuhDeposit && <Row label="Potongan Deposit" value={`- ${formatRupiah(totalPotongan)}`} muted />}
+          {butuhDeposit && <Row label="Deposit Dikembalikan" value={formatRupiah(depositRefund)} muted />}
+          {butuhDeposit && <div className="my-1 border-t" />}
           <Row label="Kekurangan Pembayaran" value={formatRupiah(sisaTagihan)} bold />
         </div>
 

@@ -3,6 +3,7 @@ const RentalDetail = require("../models/rentalDetailModel");
 const Barang = require("../models/barangModel");
 const Customer = require("../models/customerModel");
 const Pembayaran = require("../models/pembayaranModel");
+const Pengaturan = require("../models/pengaturanModel");
 const asyncHandler = require("../utils/asyncHandler");
 const buatKodeRental = require("../utils/kodeRental");
 const buatKodePembayaran = require("../utils/kodePembayaran");
@@ -31,6 +32,74 @@ const normalisasiMetodeBayar = (metode) =>
   String(metode || "")
     .trim()
     .toLowerCase();
+
+const normalisasiJenisJaminan = (jenis) =>
+  String(jenis || "deposit_uang")
+    .trim()
+    .toLowerCase()
+    .replace(/\+/g, "_")
+    .replace(/deposit\s*\+\s*dokumen/g, "deposit_dokumen")
+    .replace(/deposit\s+uang/g, "deposit_uang")
+    .replace(/tanpa\s+jaminan/g, "tanpa_jaminan")
+    .replace(/\s+/g, "_");
+
+const normalisasiJenisDokumen = (jenis) =>
+  String(jenis || "ktp")
+    .trim()
+    .toLowerCase()
+    .replace(/kartu\s+mahasiswa/g, "kartu_mahasiswa")
+    .replace(/\s+/g, "_");
+
+const normalisasiStatusJaminan = (status) =>
+  String(status || "belum_diterima")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+const perluDeposit = (jenisJaminan) => ["deposit_uang", "deposit_dokumen"].includes(jenisJaminan);
+
+const perluDokumen = (jenisJaminan) => ["dokumen", "deposit_dokumen"].includes(jenisJaminan);
+
+const ambilDefaultJaminan = async () => {
+  const pengaturan = await Pengaturan.findOne();
+
+  if (!pengaturan) {
+    return {
+      jenis_jaminan_default: "deposit_uang",
+      nominal_deposit_default: 100000,
+      jenis_dokumen_default: "ktp",
+    };
+  }
+
+  return {
+    jenis_jaminan_default: normalisasiJenisJaminan(
+      pengaturan.jenis_jaminan_default || "deposit_uang"
+    ),
+    nominal_deposit_default: Number(
+      pengaturan.nominal_deposit_default ?? pengaturan.deposit_minimum_default ?? 100000
+    ),
+    jenis_dokumen_default: normalisasiJenisDokumen(pengaturan.jenis_dokumen_default || "ktp"),
+  };
+};
+
+const tentukanStatusJaminanSaatKembali = ({
+  jenisJaminan,
+  depositDiterima,
+  totalDenda,
+  statusDokumen,
+}) => {
+  if (statusDokumen === "ditahan") return "ditahan";
+
+  if (perluDeposit(jenisJaminan)) {
+    return tentukanStatusDeposit(depositDiterima, totalDenda);
+  }
+
+  if (perluDokumen(jenisJaminan)) {
+    return statusDokumen || "dikembalikan";
+  }
+
+  return "belum_diterima";
+};
 
 const tentukanStatusDeposit = (depositDiterima, totalPotongan) => {
   const nominalDiterima = Number(depositDiterima || 0);
@@ -220,6 +289,27 @@ const hitungTotal = (detail, body = {}) => {
   };
 };
 
+const hitungDataJaminan = (body, defaultJaminan) => {
+  const jenisJaminan = normalisasiJenisJaminan(
+    body.jenis_jaminan || defaultJaminan.jenis_jaminan_default
+  );
+  const nominalJaminanInput = Number(
+    body.nominal_jaminan ?? body.deposit_required ?? body.deposit ?? defaultJaminan.nominal_deposit_default
+  );
+  const nominalJaminan = Math.max(0, nominalJaminanInput);
+  const jenisDokumen = perluDokumen(jenisJaminan)
+    ? normalisasiJenisDokumen(body.jenis_dokumen || defaultJaminan.jenis_dokumen_default)
+    : null;
+  const nominalDepositUntukKompat = perluDeposit(jenisJaminan) ? nominalJaminan : 0;
+
+  return {
+    jenisJaminan,
+    nominalJaminan,
+    jenisDokumen,
+    nominalDepositUntukKompat,
+  };
+};
+
 const ambilKodeBarangRental = async (kodeRental) => {
   const detail = await RentalDetail.find({ kode_rental: kodeRental }).select("kode_barang");
   return detail.map((item) => item.kode_barang);
@@ -300,6 +390,10 @@ const tambahRental = asyncHandler(async (req, res) => {
   const tanggalMulai = req.body.tanggal_mulai;
   const tanggalKembali = req.body.tanggal_rencana_kembali;
   const detail = await siapkanDetail(ambilDetailPayload(req.body), tanggalMulai, tanggalKembali);
+  const defaultJaminan = await ambilDefaultJaminan();
+  const dataJaminan = hitungDataJaminan(req.body, defaultJaminan);
+  req.body.deposit_required = dataJaminan.nominalDepositUntukKompat;
+  req.body.deposit = dataJaminan.nominalDepositUntukKompat;
   const total = hitungTotal(detail, req.body);
   const kodeRental = req.body.kode_rental || (await buatKodeRental(tanggalMulai));
   const status = normalisasiStatus(req.body.status || "booking");
@@ -319,6 +413,12 @@ const tambahRental = asyncHandler(async (req, res) => {
     tanggal_kembali: req.body.tanggal_kembali || null,
     status,
     ...total,
+    jenis_jaminan: dataJaminan.jenisJaminan,
+    nominal_jaminan: dataJaminan.nominalJaminan,
+    jenis_dokumen: dataJaminan.jenisDokumen,
+    nomor_dokumen: null,
+    foto_dokumen: [],
+    status_jaminan: "belum_diterima",
     deposit_received: 0,
     deposit_received_date: null,
     deposit_received_method: null,
@@ -388,6 +488,20 @@ const ubahRental = asyncHandler(async (req, res) => {
         kodeRentalAbaikan: rental.kode_rental,
       })
     : detailSebelumnya;
+  const defaultJaminan = await ambilDefaultJaminan();
+  const dataJaminan = hitungDataJaminan(
+    {
+      ...req.body,
+      jenis_jaminan: req.body.jenis_jaminan || rental.jenis_jaminan,
+      nominal_jaminan: req.body.nominal_jaminan ?? rental.nominal_jaminan,
+      jenis_dokumen: req.body.jenis_dokumen || rental.jenis_dokumen,
+      deposit_required: req.body.deposit_required ?? rental.deposit_required,
+      deposit: req.body.deposit ?? rental.deposit,
+    },
+    defaultJaminan
+  );
+  req.body.deposit_required = dataJaminan.nominalDepositUntukKompat;
+  req.body.deposit = dataJaminan.nominalDepositUntukKompat;
   const total = hitungTotal(detail, req.body);
   const statusTujuan = req.body.status ? normalisasiStatus(req.body.status) : rental.status;
   const statusSebelum = rental.status;
@@ -410,6 +524,9 @@ const ubahRental = asyncHandler(async (req, res) => {
   rental.diskon = total.diskon;
   rental.deposit = total.deposit;
   rental.deposit_required = total.deposit_required;
+  rental.jenis_jaminan = dataJaminan.jenisJaminan;
+  rental.nominal_jaminan = dataJaminan.nominalJaminan;
+  rental.jenis_dokumen = dataJaminan.jenisDokumen;
   rental.subtotal = total.subtotal;
   rental.total_sewa = total.total_sewa;
   rental.total_denda = total.total_denda;
@@ -440,6 +557,18 @@ const ubahRental = asyncHandler(async (req, res) => {
     rental.deposit_status = depositDiterima > 0 ? "diterima" : "belum_diterima";
   }
 
+  if (req.body.nomor_dokumen !== undefined) {
+    rental.nomor_dokumen = req.body.nomor_dokumen || null;
+  }
+
+  if (req.body.foto_dokumen !== undefined) {
+    rental.foto_dokumen = Array.isArray(req.body.foto_dokumen) ? req.body.foto_dokumen : [];
+  }
+
+  if (req.body.status_jaminan !== undefined) {
+    rental.status_jaminan = normalisasiStatusJaminan(req.body.status_jaminan);
+  }
+
   if (statusTujuan === "sedang_disewa") {
     rental.tanggal_keluar = req.body.tanggal_keluar || rental.tanggal_keluar || hariIni();
 
@@ -447,6 +576,16 @@ const ubahRental = asyncHandler(async (req, res) => {
       rental.deposit_status = "diterima";
       rental.deposit_received_date = rental.deposit_received_date || hariIni();
     }
+
+    const adaPenerimaanDeposit = perluDeposit(rental.jenis_jaminan)
+      ? Number(rental.deposit_received || 0) > 0
+      : true;
+    const adaPenerimaanDokumen = perluDokumen(rental.jenis_jaminan)
+      ? Boolean(rental.nomor_dokumen) && Array.isArray(rental.foto_dokumen) && rental.foto_dokumen.length > 0
+      : true;
+
+    rental.status_jaminan =
+      adaPenerimaanDeposit && adaPenerimaanDokumen ? "diterima" : "belum_diterima";
   }
 
   if (statusTujuan === "serah_terima_kembali" || statusTujuan === "selesai") {
@@ -456,6 +595,16 @@ const ubahRental = asyncHandler(async (req, res) => {
       rental.deposit_received,
       rental.total_denda
     );
+    rental.status_jaminan = tentukanStatusJaminanSaatKembali({
+      jenisJaminan: rental.jenis_jaminan,
+      depositDiterima: rental.deposit_received,
+      totalDenda: rental.total_denda,
+      statusDokumen: req.body.status_jaminan
+        ? normalisasiStatusJaminan(req.body.status_jaminan)
+        : perluDokumen(rental.jenis_jaminan)
+          ? "dikembalikan"
+          : null,
+    });
   }
 
   await rental.save();
@@ -526,6 +675,16 @@ const ubahStatusRental = asyncHandler(async (req, res) => {
       rental.deposit_received,
       rental.total_denda
     );
+    rental.status_jaminan = tentukanStatusJaminanSaatKembali({
+      jenisJaminan: rental.jenis_jaminan,
+      depositDiterima: rental.deposit_received,
+      totalDenda: rental.total_denda,
+      statusDokumen: req.body.status_jaminan
+        ? normalisasiStatusJaminan(req.body.status_jaminan)
+        : perluDokumen(rental.jenis_jaminan)
+          ? "dikembalikan"
+          : null,
+    });
   }
 
   await rental.save();

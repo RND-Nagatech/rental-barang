@@ -21,6 +21,21 @@ export type DepositStatus =
   | "Dikembalikan"
   | "Dipotong";
 
+export type GuaranteeType =
+  | "Deposit Uang"
+  | "Dokumen"
+  | "Deposit + Dokumen"
+  | "Tanpa Jaminan";
+
+export type DocumentType = "KTP" | "SIM" | "Paspor" | "Kartu Mahasiswa" | "Lainnya";
+
+export type GuaranteeStatus =
+  | "Belum Diterima"
+  | "Diterima"
+  | "Dikembalikan"
+  | "Dipotong"
+  | "Ditahan";
+
 export type PaymentMethod = "Tunai" | "Transfer" | "QRIS" | "Kartu";
 
 export interface Category {
@@ -97,6 +112,12 @@ export interface Transaction {
   tanggal_kembali: string | null;
   items: TransactionLine[];
   diskon: number;
+  jenis_jaminan: GuaranteeType;
+  nominal_jaminan: number;
+  jenis_dokumen: DocumentType;
+  nomor_dokumen?: string;
+  foto_dokumen?: string[];
+  status_jaminan: GuaranteeStatus;
   deposit_required: number;
   deposit_received: number;
   deposit_received_date: string | null;

@@ -29,6 +29,21 @@ const pengaturanSchema = new mongoose.Schema(
       min: [0, "Deposit minimum default tidak boleh kurang dari 0"],
       default: 100000,
     },
+    jenis_jaminan_default: {
+      type: String,
+      enum: ["deposit_uang", "dokumen", "deposit_dokumen", "tanpa_jaminan"],
+      default: "deposit_uang",
+    },
+    nominal_deposit_default: {
+      type: Number,
+      min: [0, "Nominal deposit default tidak boleh kurang dari 0"],
+      default: 100000,
+    },
+    jenis_dokumen_default: {
+      type: String,
+      enum: ["ktp", "sim", "paspor", "kartu_mahasiswa", "lainnya"],
+      default: "ktp",
+    },
     notifikasi_pengembalian: {
       type: Boolean,
       default: true,

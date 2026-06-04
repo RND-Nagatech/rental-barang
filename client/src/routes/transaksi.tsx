@@ -3,7 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Eye, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
-import type { PaymentMethod, PaymentType, Transaction, TransactionLine } from "@/data/types";
+import type {
+  DocumentType,
+  GuaranteeType,
+  PaymentMethod,
+  PaymentType,
+  Transaction,
+  TransactionLine,
+} from "@/data/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -63,6 +70,13 @@ function TransaksiPage() {
   const [diskon, setDiskon] = React.useState(0);
   const [catatan, setCatatan] = React.useState("");
   const [defaultDeposit, setDefaultDeposit] = React.useState(0);
+  const [defaultJenisJaminan, setDefaultJenisJaminan] = React.useState<GuaranteeType>(
+    "Deposit Uang",
+  );
+  const [defaultJenisDokumen, setDefaultJenisDokumen] = React.useState<DocumentType>("KTP");
+  const [jenisJaminan, setJenisJaminan] = React.useState<GuaranteeType>("Deposit Uang");
+  const [nominalJaminan, setNominalJaminan] = React.useState(0);
+  const [jenisDokumen, setJenisDokumen] = React.useState<DocumentType>("KTP");
   const [metodePembayaran, setMetodePembayaran] = React.useState<PaymentMethod>("Transfer");
   const [nominalBayar, setNominalBayar] = React.useState(0);
   const [buktiPembayaran, setBuktiPembayaran] = React.useState("");
@@ -80,7 +94,31 @@ function TransaksiPage() {
     pengaturanApi
       .get()
       .then((data) => {
-        setDefaultDeposit(data.deposit_minimum_default);
+        const defaultNominal = Number(
+          data.nominal_deposit_default ?? data.deposit_minimum_default ?? 0,
+        );
+        const mapJaminan: Record<string, GuaranteeType> = {
+          deposit_uang: "Deposit Uang",
+          dokumen: "Dokumen",
+          deposit_dokumen: "Deposit + Dokumen",
+          tanpa_jaminan: "Tanpa Jaminan",
+        };
+        const mapDokumen: Record<string, DocumentType> = {
+          ktp: "KTP",
+          sim: "SIM",
+          paspor: "Paspor",
+          kartu_mahasiswa: "Kartu Mahasiswa",
+          lainnya: "Lainnya",
+        };
+        const jaminan = mapJaminan[data.jenis_jaminan_default] || "Deposit Uang";
+        const dokumen = mapDokumen[data.jenis_dokumen_default] || "KTP";
+
+        setDefaultDeposit(defaultNominal);
+        setDefaultJenisJaminan(jaminan);
+        setDefaultJenisDokumen(dokumen);
+        setJenisJaminan(jaminan);
+        setJenisDokumen(dokumen);
+        setNominalJaminan(defaultNominal);
       })
       .catch(() => undefined);
   }, []);
@@ -89,6 +127,8 @@ function TransaksiPage() {
   const days = rentalDays(mulai, kembali);
   const subtotal = lines.reduce((s, l) => s + l.qty * l.harga_sewa * days, 0);
   const total = Math.max(0, subtotal - diskon);
+  const butuhDeposit = ["Deposit Uang", "Deposit + Dokumen"].includes(jenisJaminan);
+  const butuhDokumen = ["Dokumen", "Deposit + Dokumen"].includes(jenisJaminan);
   const depositRequired = Math.max(
     defaultDeposit,
     lines.reduce((sum, line) => {
@@ -104,6 +144,9 @@ function TransaksiPage() {
     setLines([]);
     setDiskon(0);
     setCatatan("");
+    setJenisJaminan(defaultJenisJaminan);
+    setJenisDokumen(defaultJenisDokumen);
+    setNominalJaminan(defaultDeposit);
     setMetodePembayaran("Transfer");
     setNominalBayar(0);
     setBuktiPembayaran("");
@@ -144,7 +187,13 @@ function TransaksiPage() {
       tanggal_kembali: null,
       items: lines,
       diskon,
-      deposit_required: depositRequired,
+      jenis_jaminan: jenisJaminan,
+      nominal_jaminan: butuhDeposit ? Math.max(0, nominalJaminan || depositRequired) : 0,
+      jenis_dokumen: jenisDokumen,
+      nomor_dokumen: "",
+      foto_dokumen: [],
+      status_jaminan: "Belum Diterima",
+      deposit_required: butuhDeposit ? Math.max(0, nominalJaminan || depositRequired) : 0,
       deposit_received: 0,
       deposit_received_date: null,
       deposit_status: "Belum Diterima",
@@ -383,6 +432,54 @@ function TransaksiPage() {
             <CurrencyInput value={diskon} onChange={setDiskon} />
           </div>
         </div>
+
+        <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+          <p className="text-sm font-semibold">Jaminan</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Jenis Jaminan</Label>
+              <Select value={jenisJaminan} onValueChange={(value) => setJenisJaminan(value as GuaranteeType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Deposit Uang", "Dokumen", "Deposit + Dokumen", "Tanpa Jaminan"].map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nominal Jaminan</Label>
+              <CurrencyInput
+                value={butuhDeposit ? nominalJaminan : 0}
+                onChange={setNominalJaminan}
+                disabled={!butuhDeposit}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Jenis Dokumen</Label>
+              <Select
+                value={jenisDokumen}
+                onValueChange={(value) => setJenisDokumen(value as DocumentType)}
+                disabled={!butuhDokumen}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["KTP", "SIM", "Paspor", "Kartu Mahasiswa", "Lainnya"].map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Catatan</Label>
           <Textarea
@@ -427,11 +524,11 @@ function TransaksiPage() {
           <SummaryRow label="Diskon" value={`- ${formatRupiah(diskon)}`} />
           <div className="my-1 border-t" />
           <SummaryRow label="Total" value={formatRupiah(total)} bold />
-          <SummaryRow
-            label="Estimasi Deposit (diterima saat barang keluar)"
-            value={formatRupiah(depositRequired)}
-            muted
-          />
+          <SummaryRow label="Jenis Jaminan" value={jenisJaminan} muted />
+          {butuhDeposit && (
+            <SummaryRow label="Nominal Jaminan" value={formatRupiah(nominalJaminan)} muted />
+          )}
+          {butuhDokumen && <SummaryRow label="Dokumen" value={jenisDokumen} muted />}
         </div>
       </ModalForm>
 
@@ -459,9 +556,12 @@ function TransaksiPage() {
               <Info label="Tanggal Mulai" value={formatDate(detail.tanggal_mulai)} />
               <Info label="Rencana Kembali" value={formatDate(detail.tanggal_rencana_kembali)} />
               <Info label="Durasi" value={`${txDays(detail)} hari`} />
+              <Info label="Jenis Jaminan" value={detail.jenis_jaminan} />
+              <Info label="Nominal Jaminan" value={formatRupiah(detail.nominal_jaminan)} />
+              <Info label="Jenis Dokumen" value={detail.jenis_dokumen} />
               <Info label="Deposit Wajib" value={formatRupiah(detail.deposit_required)} />
               <Info label="Deposit Diterima" value={formatRupiah(detail.deposit_received)} />
-              <Info label="Status Deposit" value={detail.deposit_status} />
+              <Info label="Status Jaminan" value={detail.status_jaminan} />
             </div>
             <div>
               <h4 className="mb-2 font-display text-sm font-semibold">Barang Disewa</h4>
