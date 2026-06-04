@@ -98,9 +98,11 @@ function KembaliForm({
   const totalDenda = dendaTerlambat + biayaKerusakan + biayaKehilangan;
   const total = txTotal(t);
   const sisaSebelumDeposit = Math.max(0, total + totalDenda - t.terbayar);
-  const depositDipotong = Math.min(t.depositDiterima, totalDenda);
-  const depositDikembalikan = Math.max(0, t.depositDiterima - depositDipotong);
-  const sisaTagihan = Math.max(0, sisaSebelumDeposit - depositDipotong);
+  const depositDiterima = Number(t.deposit_received || 0);
+  const totalPotongan = Math.min(depositDiterima, totalDenda);
+  const depositRefund = Math.max(0, depositDiterima - totalPotongan);
+  const sisaTagihan = Math.max(0, sisaSebelumDeposit - totalPotongan);
+  const depositStatus = depositDiterima <= 0 ? "Belum Diterima" : depositRefund > 0 ? "Dikembalikan" : "Dipotong";
 
   function finish() {
     onDone({
@@ -108,6 +110,7 @@ function KembaliForm({
       items: lines,
       tanggal_kembali: toISODate(new Date()),
       status: "Selesai",
+      deposit_status: depositStatus,
       dendaKeterlambatan: dendaTerlambat,
       dendaKerusakan: biayaKerusakan,
       dendaKehilangan: biayaKehilangan,
@@ -248,6 +251,9 @@ function KembaliForm({
         </div>
 
         <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
+          <Row label="Deposit Diterima" value={formatRupiah(depositDiterima)} />
+          <Row label="Status Deposit" value={depositStatus} />
+          <div className="my-1 border-t" />
           <Row
             label={`Denda Keterlambatan (${lateDays} hari)`}
             value={formatRupiah(dendaTerlambat)}
@@ -256,10 +262,10 @@ function KembaliForm({
           <Row label="Denda Barang Hilang" value={formatRupiah(biayaKehilangan)} />
           <Row label="Total Denda" value={formatRupiah(totalDenda)} bold />
           <div className="my-1 border-t" />
-          <Row label="Deposit Dipotong" value={`- ${formatRupiah(depositDipotong)}`} muted />
-          <Row label="Deposit Dikembalikan" value={formatRupiah(depositDikembalikan)} muted />
+          <Row label="Potongan Deposit" value={`- ${formatRupiah(totalPotongan)}`} muted />
+          <Row label="Deposit Dikembalikan" value={formatRupiah(depositRefund)} muted />
           <div className="my-1 border-t" />
-          <Row label="Sisa Tagihan" value={formatRupiah(sisaTagihan)} bold />
+          <Row label="Kekurangan Pembayaran" value={formatRupiah(sisaTagihan)} bold />
         </div>
 
         <Button className="w-full" onClick={finish}>

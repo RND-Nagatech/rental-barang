@@ -65,6 +65,35 @@ const rentalSchema = new mongoose.Schema(
       min: [0, "Deposit tidak boleh kurang dari 0"],
       default: 0,
     },
+    deposit_required: {
+      type: Number,
+      min: [0, "Deposit wajib tidak boleh kurang dari 0"],
+      default: 0,
+    },
+    deposit_received: {
+      type: Number,
+      min: [0, "Deposit diterima tidak boleh kurang dari 0"],
+      default: 0,
+    },
+    deposit_received_date: {
+      type: String,
+      default: null,
+    },
+    deposit_received_method: {
+      type: String,
+      enum: ["tunai", "transfer", "qris", "kartu", "lainnya"],
+      default: null,
+    },
+    deposit_received_note: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    deposit_status: {
+      type: String,
+      enum: ["belum_diterima", "diterima", "dikembalikan", "dipotong"],
+      default: "belum_diterima",
+    },
     total_sewa: {
       type: Number,
       min: [0, "Total sewa tidak boleh kurang dari 0"],

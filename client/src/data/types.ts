@@ -13,7 +13,13 @@ export type TransactionStatus =
 
 export type PaymentStatus = "Belum Bayar" | "Dibayar Sebagian" | "Lunas";
 
-export type PaymentType = "DP" | "Tambah DP" | "Pelunasan" | "Denda" | "Refund Deposit";
+export type PaymentType = "DP" | "Tambah DP" | "Pelunasan";
+
+export type DepositStatus =
+  | "Belum Diterima"
+  | "Diterima"
+  | "Dikembalikan"
+  | "Dipotong";
 
 export type PaymentMethod = "Tunai" | "Transfer" | "QRIS" | "Kartu";
 
@@ -91,8 +97,12 @@ export interface Transaction {
   tanggal_kembali: string | null;
   items: TransactionLine[];
   diskon: number;
-  deposit: number;
-  depositDiterima: number;
+  deposit_required: number;
+  deposit_received: number;
+  deposit_received_date: string | null;
+  deposit_status: DepositStatus;
+  deposit_received_method?: PaymentMethod;
+  deposit_received_note?: string;
   total: number;
   catatan: string;
   status: TransactionStatus;

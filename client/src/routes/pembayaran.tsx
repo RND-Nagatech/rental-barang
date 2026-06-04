@@ -28,7 +28,7 @@ export const Route = createFileRoute("/pembayaran")({
   component: Page,
 });
 
-const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan", "Denda", "Refund Deposit"];
+const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan"];
 const METHODS: PaymentMethod[] = ["Tunai", "Transfer", "QRIS", "Kartu"];
 
 function Page() {
@@ -94,7 +94,7 @@ function Page() {
     <div className="space-y-6">
       <PageHeader
         title="Pembayaran"
-        description="Catat DP, pelunasan, denda, dan pengembalian deposit."
+        description="Catat pembayaran rental: DP, tambah DP, dan pelunasan."
         actions={
           <Button onClick={() => setOpen(true)}>
             <Plus /> Catat Pembayaran

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpFromLine } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
-import type { Transaction, ItemCondition } from "@/data/types";
+import type { Transaction, ItemCondition, PaymentMethod } from "@/data/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatDate, toISODate } from "@/lib/format";
+import { formatDate, formatRupiah, toISODate } from "@/lib/format";
 
 export const Route = createFileRoute("/serah-terima-keluar")({
   head: () => ({ meta: [{ title: "Serah Terima Keluar — Rentory" }] }),
@@ -77,7 +77,13 @@ function KeluarCard({
       kondisi_awal: "Baik" as ItemCondition,
     })),
   );
-  const [depositDiterima, setDepositDiterima] = React.useState(t.deposit);
+  const [depositNominal, setDepositNominal] = React.useState(
+    t.deposit_received > 0 ? t.deposit_received : t.deposit_required,
+  );
+  const [depositMethod, setDepositMethod] = React.useState<PaymentMethod>(
+    t.deposit_received_method || "Transfer",
+  );
+  const [depositNote, setDepositNote] = React.useState(t.deposit_received_note || "");
 
   function submit() {
     const invalidLine = lines.find(
@@ -95,7 +101,12 @@ function KeluarCard({
     onSubmit({
       ...t,
       items: lines,
-      depositDiterima,
+      deposit_required: t.deposit_required,
+      deposit_received: depositNominal,
+      deposit_received_date: toISODate(new Date()),
+      deposit_status: depositNominal > 0 ? "Diterima" : "Belum Diterima",
+      deposit_received_method: depositMethod,
+      deposit_received_note: depositNote,
       tanggal_keluar: toISODate(new Date()),
       status: "Sedang Disewa",
     });
@@ -195,10 +206,47 @@ function KeluarCard({
           ))}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Deposit Diterima</Label>
-            <CurrencyInput value={depositDiterima} onChange={setDepositDiterima} />
+        <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+          <p className="text-sm font-semibold">Deposit</p>
+          <p className="text-xs text-muted-foreground">
+            Deposit adalah jaminan barang dan dicatat saat serah terima keluar.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Deposit Wajib</Label>
+              <Input value={formatRupiah(t.deposit_required)} className="h-9" disabled />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nominal Deposit Diterima</Label>
+              <CurrencyInput value={depositNominal} onChange={setDepositNominal} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
+              <Select
+                value={depositMethod}
+                onValueChange={(value) => setDepositMethod(value as PaymentMethod)}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Tunai", "Transfer", "QRIS", "Kartu"].map((metode) => (
+                    <SelectItem key={metode} value={metode}>
+                      {metode}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Catatan Deposit</Label>
+              <Input
+                className="h-9"
+                value={depositNote}
+                placeholder="opsional"
+                onChange={(e) => setDepositNote(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 

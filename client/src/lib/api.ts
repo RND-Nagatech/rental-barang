@@ -99,6 +99,12 @@ type ApiRental = MongoDoc & {
   subtotal?: number;
   diskon?: number;
   deposit?: number;
+  deposit_required?: number;
+  deposit_received?: number;
+  deposit_received_date?: string | null;
+  deposit_received_method?: string | null;
+  deposit_received_note?: string | null;
+  deposit_status?: string;
   total_sewa?: number;
   total_denda?: number;
   total_bayar?: number;
@@ -227,12 +233,28 @@ const tipeBayar = (tipe?: string): PaymentType => {
     dp: "DP",
     tambah_dp: "Tambah DP",
     pelunasan: "Pelunasan",
-    denda: "Denda",
-    pengembalian_deposit: "Refund Deposit",
-    refund_deposit: "Refund Deposit",
   };
 
   return map[tipe || ""] || "DP";
+};
+
+const statusDeposit = (status?: string) => {
+  const map: Record<string, Transaction["deposit_status"]> = {
+    belum_diterima: "Belum Diterima",
+    diterima: "Diterima",
+    dikembalikan: "Dikembalikan",
+    dipotong: "Dipotong",
+  };
+
+  return map[status || ""] || "Belum Diterima";
+};
+
+const metodePembayaran = (metode?: string): Transaction["deposit_received_method"] => {
+  if (metode === "qris") return "QRIS";
+  if (metode === "kartu") return "Kartu";
+  if (metode === "transfer") return "Transfer";
+  if (metode === "tunai") return "Tunai";
+  return undefined;
 };
 
 const paymentStatus = (rental: ApiRental): PaymentStatus => {
@@ -342,8 +364,12 @@ export const mapRental = (rental: ApiRental, customers: Customer[], items: Item[
       };
     }),
     diskon: Number(rental.diskon || 0),
-    deposit: Number(rental.deposit || 0),
-    depositDiterima: 0,
+    deposit_required: Number(rental.deposit_required ?? rental.deposit ?? 0),
+    deposit_received: Number(rental.deposit_received || 0),
+    deposit_received_date: dateOnly(rental.deposit_received_date) || null,
+    deposit_status: statusDeposit(rental.deposit_status),
+    deposit_received_method: metodePembayaran(rental.deposit_received_method || undefined),
+    deposit_received_note: rental.deposit_received_note || "",
     total: Number(rental.total_sewa || 0),
     catatan: rental.catatan || "",
     status: statusTransaksi(rental.status),
@@ -494,7 +520,7 @@ export const rentalApi = {
           tanggal_mulai: transaction.tanggal_mulai,
           tanggal_rencana_kembali: transaction.tanggal_rencana_kembali,
           diskon: transaction.diskon,
-          deposit: transaction.deposit,
+          deposit_required: transaction.deposit_required,
           total_bayar: transaction.nominal_bayar ?? transaction.terbayar,
           nominal_bayar: transaction.nominal_bayar ?? transaction.terbayar,
           metode_pembayaran: transaction.metode_pembayaran,
@@ -535,7 +561,11 @@ export const rentalApi = {
           tanggal_keluar: transaction.tanggal_keluar,
           tanggal_kembali: transaction.tanggal_kembali,
           diskon: transaction.diskon,
-          deposit: transaction.deposit,
+          deposit_required: transaction.deposit_required,
+          deposit_received: transaction.deposit_received,
+          deposit_received_date: transaction.deposit_received_date,
+          deposit_received_method: transaction.deposit_received_method,
+          deposit_received_note: transaction.deposit_received_note,
           total_bayar: transaction.terbayar,
           total_denda:
             transaction.dendaKeterlambatan +

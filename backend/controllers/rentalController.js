@@ -27,6 +27,20 @@ const hariIni = () => {
   return `${tanggal.getFullYear()}-${bulan}-${hari}`;
 };
 
+const normalisasiMetodeBayar = (metode) =>
+  String(metode || "")
+    .trim()
+    .toLowerCase();
+
+const tentukanStatusDeposit = (depositDiterima, totalPotongan) => {
+  const nominalDiterima = Number(depositDiterima || 0);
+  const potongan = Number(totalPotongan || 0);
+
+  if (nominalDiterima <= 0) return "belum_diterima";
+  if (nominalDiterima - potongan > 0) return "dikembalikan";
+  return "dipotong";
+};
+
 const rentangOverlap = (mulaiA, selesaiA, mulaiB, selesaiB) =>
   toDateOnly(mulaiA) <= toDateOnly(selesaiB) && toDateOnly(selesaiA) >= toDateOnly(mulaiB);
 
@@ -189,7 +203,7 @@ const siapkanDetail = async (detailPayload, tanggalMulai, tanggalKembali, opsi =
 const hitungTotal = (detail, body = {}) => {
   const subtotal = detail.reduce((sum, line) => sum + Number(line.subtotal || 0), 0);
   const diskon = Number(body.diskon || 0);
-  const deposit = Number(body.deposit || 0);
+  const depositRequired = Number(body.deposit_required ?? body.deposit ?? 0);
   const totalDenda = Number(body.total_denda || 0);
   const totalBayar = Number(body.total_bayar || body.terbayar || 0);
   const totalSewa = Math.max(0, subtotal - diskon);
@@ -197,7 +211,8 @@ const hitungTotal = (detail, body = {}) => {
   return {
     subtotal,
     diskon,
-    deposit,
+    deposit: depositRequired,
+    deposit_required: depositRequired,
     total_sewa: totalSewa,
     total_denda: totalDenda,
     total_bayar: totalBayar,
@@ -304,6 +319,11 @@ const tambahRental = asyncHandler(async (req, res) => {
     tanggal_kembali: req.body.tanggal_kembali || null,
     status,
     ...total,
+    deposit_received: 0,
+    deposit_received_date: null,
+    deposit_received_method: null,
+    deposit_received_note: null,
+    deposit_status: "belum_diterima",
     catatan: req.body.catatan || null,
   });
 
@@ -389,6 +409,7 @@ const ubahRental = asyncHandler(async (req, res) => {
   rental.tanggal_kembali = req.body.tanggal_kembali ?? rental.tanggal_kembali;
   rental.diskon = total.diskon;
   rental.deposit = total.deposit;
+  rental.deposit_required = total.deposit_required;
   rental.subtotal = total.subtotal;
   rental.total_sewa = total.total_sewa;
   rental.total_denda = total.total_denda;
@@ -397,12 +418,44 @@ const ubahRental = asyncHandler(async (req, res) => {
   rental.catatan = req.body.catatan ?? rental.catatan;
   rental.status = statusTujuan;
 
+  const adaUpdateDepositDiterima =
+    req.body.deposit_received !== undefined || req.body.depositDiterima !== undefined;
+
+  if (adaUpdateDepositDiterima) {
+    const depositDiterima = Number(req.body.deposit_received ?? req.body.depositDiterima ?? 0);
+
+    if (depositDiterima < 0) {
+      res.status(400);
+      throw new Error("Deposit diterima tidak boleh kurang dari 0");
+    }
+
+    rental.deposit_received = depositDiterima;
+    rental.deposit_received_date =
+      req.body.deposit_received_date || req.body.tanggal_deposit || rental.deposit_received_date || hariIni();
+    rental.deposit_received_method = req.body.deposit_received_method
+      ? normalisasiMetodeBayar(req.body.deposit_received_method)
+      : rental.deposit_received_method;
+    rental.deposit_received_note =
+      req.body.deposit_received_note ?? req.body.catatan_deposit ?? rental.deposit_received_note;
+    rental.deposit_status = depositDiterima > 0 ? "diterima" : "belum_diterima";
+  }
+
   if (statusTujuan === "sedang_disewa") {
     rental.tanggal_keluar = req.body.tanggal_keluar || rental.tanggal_keluar || hariIni();
+
+    if (Number(rental.deposit_received || 0) > 0) {
+      rental.deposit_status = "diterima";
+      rental.deposit_received_date = rental.deposit_received_date || hariIni();
+    }
   }
 
   if (statusTujuan === "serah_terima_kembali" || statusTujuan === "selesai") {
     rental.tanggal_kembali = req.body.tanggal_kembali || rental.tanggal_kembali || hariIni();
+
+    rental.deposit_status = tentukanStatusDeposit(
+      rental.deposit_received,
+      rental.total_denda
+    );
   }
 
   await rental.save();
@@ -469,6 +522,10 @@ const ubahStatusRental = asyncHandler(async (req, res) => {
 
   if (statusTujuan === "serah_terima_kembali" || statusTujuan === "selesai") {
     rental.tanggal_kembali = req.body.tanggal_kembali || hariIni();
+    rental.deposit_status = tentukanStatusDeposit(
+      rental.deposit_received,
+      rental.total_denda
+    );
   }
 
   await rental.save();

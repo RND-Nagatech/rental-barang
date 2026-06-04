@@ -29,9 +29,7 @@ export const Route = createFileRoute("/laporan")({
 function Page() {
   const { transactions, payments, getCustomer } = useStore();
 
-  const pendapatan = payments
-    .filter((p) => p.tipe !== "Refund Deposit")
-    .reduce((s, p) => s + p.nominal, 0);
+  const pendapatan = payments.reduce((s, p) => s + p.nominal, 0);
   const totalDenda = transactions.reduce(
     (s, t) => s + t.dendaKeterlambatan + t.dendaKerusakan + t.dendaKehilangan,
     0,

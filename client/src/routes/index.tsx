@@ -50,11 +50,7 @@ function Dashboard() {
   const pendapatanBulanIni = payments
     .filter((p) => {
       const d = parseDateOnly(p.tanggal);
-      return (
-        d.getMonth() === now.getMonth() &&
-        d.getFullYear() === now.getFullYear() &&
-        p.tipe !== "Refund Deposit"
-      );
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     })
     .reduce((s, p) => s + p.nominal, 0);
 

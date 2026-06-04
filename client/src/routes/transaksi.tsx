@@ -61,7 +61,6 @@ function TransaksiPage() {
   const [kembali, setKembali] = React.useState(today);
   const [lines, setLines] = React.useState<TransactionLine[]>([]);
   const [diskon, setDiskon] = React.useState(0);
-  const [deposit, setDeposit] = React.useState(0);
   const [catatan, setCatatan] = React.useState("");
   const [defaultDeposit, setDefaultDeposit] = React.useState(0);
   const [metodePembayaran, setMetodePembayaran] = React.useState<PaymentMethod>("Transfer");
@@ -82,7 +81,6 @@ function TransaksiPage() {
       .get()
       .then((data) => {
         setDefaultDeposit(data.deposit_minimum_default);
-        setDeposit(data.deposit_minimum_default);
       })
       .catch(() => undefined);
   }, []);
@@ -91,6 +89,13 @@ function TransaksiPage() {
   const days = rentalDays(mulai, kembali);
   const subtotal = lines.reduce((s, l) => s + l.qty * l.harga_sewa * days, 0);
   const total = Math.max(0, subtotal - diskon);
+  const depositRequired = Math.max(
+    defaultDeposit,
+    lines.reduce((sum, line) => {
+      const item = items.find((barang) => barang.id === line.itemId);
+      return sum + Number(item?.deposit_default || 0) * Number(line.qty || 0);
+    }, 0),
+  );
 
   function resetForm() {
     setCustomerId("");
@@ -98,7 +103,6 @@ function TransaksiPage() {
     setKembali(today);
     setLines([]);
     setDiskon(0);
-    setDeposit(defaultDeposit);
     setCatatan("");
     setMetodePembayaran("Transfer");
     setNominalBayar(0);
@@ -126,7 +130,6 @@ function TransaksiPage() {
         catatan: "",
       },
     ]);
-    setDeposit((d) => Math.max(d, defaultDeposit) + item.deposit_default);
   }
 
   function save() {
@@ -141,8 +144,12 @@ function TransaksiPage() {
       tanggal_kembali: null,
       items: lines,
       diskon,
-      deposit,
-      depositDiterima: 0,
+      deposit_required: depositRequired,
+      deposit_received: 0,
+      deposit_received_date: null,
+      deposit_status: "Belum Diterima",
+      deposit_received_method: undefined,
+      deposit_received_note: "",
       total,
       catatan,
       status: "Booking",
@@ -375,10 +382,6 @@ function TransaksiPage() {
             <Label className="text-xs text-muted-foreground">Diskon</Label>
             <CurrencyInput value={diskon} onChange={setDiskon} />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Deposit</Label>
-            <CurrencyInput value={deposit} onChange={setDeposit} />
-          </div>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Catatan</Label>
@@ -424,7 +427,11 @@ function TransaksiPage() {
           <SummaryRow label="Diskon" value={`- ${formatRupiah(diskon)}`} />
           <div className="my-1 border-t" />
           <SummaryRow label="Total" value={formatRupiah(total)} bold />
-          <SummaryRow label="Deposit" value={formatRupiah(deposit)} muted />
+          <SummaryRow
+            label="Estimasi Deposit (diterima saat barang keluar)"
+            value={formatRupiah(depositRequired)}
+            muted
+          />
         </div>
       </ModalForm>
 
@@ -452,7 +459,9 @@ function TransaksiPage() {
               <Info label="Tanggal Mulai" value={formatDate(detail.tanggal_mulai)} />
               <Info label="Rencana Kembali" value={formatDate(detail.tanggal_rencana_kembali)} />
               <Info label="Durasi" value={`${txDays(detail)} hari`} />
-              <Info label="Deposit" value={formatRupiah(detail.deposit)} />
+              <Info label="Deposit Wajib" value={formatRupiah(detail.deposit_required)} />
+              <Info label="Deposit Diterima" value={formatRupiah(detail.deposit_received)} />
+              <Info label="Status Deposit" value={detail.deposit_status} />
             </div>
             <div>
               <h4 className="mb-2 font-display text-sm font-semibold">Barang Disewa</h4>
@@ -511,7 +520,7 @@ function TransaksiPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {["DP", "Tambah DP", "Pelunasan", "Denda", "Refund Deposit"].map((tipe) => (
+              {["DP", "Tambah DP", "Pelunasan"].map((tipe) => (
                 <SelectItem key={tipe} value={tipe}>
                   {tipe}
                 </SelectItem>

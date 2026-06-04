@@ -26,6 +26,11 @@ const statusTone: Record<string, Tone> = {
   "Belum Lunas": "danger",
   Sebagian: "warning",
   Lunas: "success",
+  // Deposit
+  "Belum Diterima": "danger",
+  Diterima: "info",
+  Dikembalikan: "success",
+  Dipotong: "warning",
   // Barang
   Tersedia: "success",
   "Disewa Sebagian": "warning",
