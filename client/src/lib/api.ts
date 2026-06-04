@@ -1,0 +1,588 @@
+import type {
+  Category,
+  Customer,
+  Item,
+  ItemCondition,
+  ItemStatus,
+  Payment,
+  PaymentStatus,
+  PaymentType,
+  Transaction,
+  TransactionStatus,
+} from "@/data/types";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const BASE_URL = API_URL.replace(/\/api\/?$/, "");
+
+type ApiList<T> = {
+  sukses: boolean;
+  pesan: string;
+  jumlah?: number;
+  data: T[];
+};
+
+type ApiSingle<T> = {
+  sukses: boolean;
+  pesan: string;
+  data: T;
+};
+
+type MongoDoc = {
+  _id: string;
+  id?: string;
+};
+
+type ApiCategory = MongoDoc & {
+  kode_kategori: string;
+  nama_kategori: string;
+  deskripsi?: string | null;
+};
+
+type ApiItem = MongoDoc & {
+  kode_barang: string;
+  nama_barang: string;
+  id_kategori?: string | ApiCategory;
+  foto?: string | null;
+  harga_sewa_per_hari?: number;
+  denda_per_hari?: number;
+  deposit_default?: number;
+  stok_total?: number;
+  stok_tersedia?: number;
+  kondisi?: string;
+  status_aktif?: boolean;
+};
+
+type ApiCustomer = MongoDoc & {
+  kode_customer: string;
+  nama_customer: string;
+  no_hp?: string;
+  email?: string | null;
+  alamat?: string | null;
+  nomor_identitas?: string | null;
+};
+
+type ApiRentalDetail = MongoDoc & {
+  kode_rental: string;
+  kode_barang: string;
+  nama_barang: string;
+  qty: number;
+  harga_sewa_per_hari: number;
+  jumlah_hari: number;
+  subtotal: number;
+  denda_per_hari: number;
+  qty_disiapkan?: number;
+  qty_keluar?: number;
+  qty_kembali?: number;
+  kondisi_awal?: ItemCondition;
+  kondisi_kembali?: ItemCondition;
+  foto_kondisi_awal?: string[];
+  foto_kondisi_kembali?: string[];
+  checklist?: boolean;
+  catatan?: string | null;
+};
+
+type ApiRental = MongoDoc & {
+  kode_rental: string;
+  kode_customer: string;
+  nama_customer: string;
+  tanggal_mulai: string;
+  tanggal_rencana_kembali: string;
+  tanggal_keluar?: string | null;
+  tanggal_kembali?: string | null;
+  status: string;
+  subtotal?: number;
+  diskon?: number;
+  deposit?: number;
+  total_sewa?: number;
+  total_denda?: number;
+  total_bayar?: number;
+  sisa_tagihan?: number;
+  catatan?: string | null;
+  detail?: ApiRentalDetail[];
+};
+
+type ApiPayment = MongoDoc & {
+  kode_pembayaran: string;
+  kode_rental: string;
+  tanggal_bayar: string;
+  tipe_bayar: string;
+  metode_bayar: string;
+  jumlah_bayar: number;
+  bukti_bayar?: string | null;
+  catatan?: string | null;
+};
+
+type ApiUpload = {
+  nama_file: string;
+  nama_asli: string;
+  tipe_file: string;
+  ukuran_file: number;
+  url: string;
+};
+
+export type Pengaturan = {
+  nama_usaha: string;
+  telepon: string;
+  alamat: string;
+  denda_keterlambatan_default: number;
+  deposit_minimum_default: number;
+  notifikasi_pengembalian: boolean;
+  tandai_overdue_otomatis: boolean;
+};
+
+const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+    ...options,
+  });
+
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(json?.pesan || "Request API gagal");
+  }
+
+  return json as T;
+};
+
+export const absoluteFileUrl = (url?: string | null) => {
+  if (!url) return "";
+  if (/^https?:\/\//.test(url)) return url;
+  return `${BASE_URL}${url}`;
+};
+
+const toId = (doc: MongoDoc) => doc.id || doc._id;
+
+const statusBarang = (item: ApiItem): ItemStatus => {
+  if (item.status_aktif === false) return "Maintenance";
+  if (!item.stok_tersedia) return "Habis";
+  if (item.stok_total && item.stok_tersedia < item.stok_total) return "Sebagian Disewa";
+  return "Tersedia";
+};
+
+const kondisiBarang = (kondisi?: string): ItemCondition => {
+  const map: Record<string, ItemCondition> = {
+    baik: "Baik",
+    lecet_ringan: "Lecet Ringan",
+    rusak_ringan: "Rusak Ringan",
+    rusak_berat: "Rusak Berat",
+    hilang: "Hilang",
+  };
+
+  return map[kondisi || ""] || "Baik";
+};
+
+const kondisiApi = (kondisi: ItemCondition) => kondisi.toLowerCase().replace(/\s+/g, "_");
+
+const statusTransaksi = (status?: string): TransactionStatus => {
+  const map: Record<string, TransactionStatus> = {
+    draft: "Draft",
+    booking: "Booking",
+    siap_keluar: "Siap Keluar",
+    sedang_disewa: "Sedang Disewa",
+    serah_terima_kembali: "Serah Terima Kembali",
+    selesai: "Selesai",
+    batal: "Dibatalkan",
+    dibatalkan: "Dibatalkan",
+  };
+
+  return map[status || ""] || "Draft";
+};
+
+const statusApi = (status: TransactionStatus) =>
+  status === "Dibatalkan" ? "batal" : status.toLowerCase().replace(/\s+/g, "_");
+
+const tipeBayar = (tipe?: string): PaymentType => {
+  const map: Record<string, PaymentType> = {
+    dp: "DP",
+    pelunasan: "Pelunasan",
+    denda: "Denda",
+    pengembalian_deposit: "Pengembalian Deposit",
+  };
+
+  return map[tipe || ""] || "DP";
+};
+
+const paymentStatus = (rental: ApiRental): PaymentStatus => {
+  const total = Number(rental.total_sewa || 0) + Number(rental.total_denda || 0);
+  const bayar = Number(rental.total_bayar || 0);
+
+  if (bayar <= 0) return "Belum Lunas";
+  if (bayar < total) return "Sebagian";
+  return "Lunas";
+};
+
+export const mapPayment = (payment: ApiPayment, transactions: Transaction[]): Payment => {
+  const transaction = transactions.find((item) => item.kode === payment.kode_rental);
+
+  return {
+    id: toId(payment),
+    transaksiId: transaction?.id || payment.kode_rental,
+    tanggal: payment.tanggal_bayar,
+    tipe: tipeBayar(payment.tipe_bayar),
+    metode:
+      payment.metode_bayar === "qris"
+        ? "QRIS"
+        : payment.metode_bayar === "kartu"
+          ? "Kartu"
+          : payment.metode_bayar === "transfer"
+            ? "Transfer"
+            : "Tunai",
+    nominal: Number(payment.jumlah_bayar || 0),
+    bukti: payment.bukti_bayar || "-",
+    catatan: payment.catatan || "",
+  };
+};
+
+export const mapCategory = (category: ApiCategory): Category => ({
+  id: toId(category),
+  kode: category.kode_kategori,
+  nama: category.nama_kategori,
+  deskripsi: category.deskripsi || "",
+  icon: "Tag",
+});
+
+export const mapItem = (item: ApiItem): Item => {
+  const kategori = item.id_kategori;
+  const kategoriId = typeof kategori === "object" && kategori ? toId(kategori) : kategori || "";
+
+  return {
+    id: toId(item),
+    kode_barang: item.kode_barang,
+    nama_barang: item.nama_barang,
+    kategoriId,
+    foto: item.foto || "📦",
+    harga_sewa_per_hari: Number(item.harga_sewa_per_hari || 0),
+    denda_per_hari: Number(item.denda_per_hari || 0),
+    stok_total: Number(item.stok_total || 0),
+    stok_tersedia: Number(item.stok_tersedia || 0),
+    deposit_default: Number(item.deposit_default || 0),
+    status: statusBarang(item),
+    kondisi: kondisiBarang(item.kondisi),
+    riwayat: [],
+  };
+};
+
+export const mapCustomer = (customer: ApiCustomer, totalTransaksi = 0): Customer => ({
+  id: toId(customer),
+  nama: customer.nama_customer,
+  telepon: customer.no_hp || "",
+  email: customer.email || "",
+  alamat: customer.alamat || "",
+  ktp: customer.nomor_identitas || "",
+  totalTransaksi,
+});
+
+export const mapRental = (rental: ApiRental, customers: Customer[], items: Item[]): Transaction => {
+  const customer = customers.find((item) => item.nama === rental.nama_customer);
+  const detail = rental.detail || [];
+
+  return {
+    id: toId(rental),
+    kode: rental.kode_rental,
+    customerId: customer?.id || rental.kode_customer,
+    tanggal_mulai: rental.tanggal_mulai,
+    tanggal_rencana_kembali: rental.tanggal_rencana_kembali,
+    tanggal_keluar: rental.tanggal_keluar || null,
+    tanggal_kembali: rental.tanggal_kembali || null,
+    items: detail.map((line) => {
+      const item = items.find((barang) => barang.kode_barang === line.kode_barang);
+
+      return {
+        itemId: item?.id || line.kode_barang,
+        nama: line.nama_barang,
+        qty: Number(line.qty || 0),
+        harga_sewa: Number(line.harga_sewa_per_hari || 0),
+        qty_disiapkan: Number(line.qty_disiapkan || 0),
+        qty_keluar: Number(line.qty_keluar || 0),
+        qty_kembali: Number(line.qty_kembali || 0),
+        kondisi_awal: line.kondisi_awal || "Baik",
+        kondisi_kembali: line.kondisi_kembali || "Baik",
+        foto_kondisi_awal: line.foto_kondisi_awal || [],
+        foto_kondisi_kembali: line.foto_kondisi_kembali || [],
+        checklist: Boolean(line.checklist),
+        catatan: line.catatan || "",
+      };
+    }),
+    diskon: Number(rental.diskon || 0),
+    deposit: Number(rental.deposit || 0),
+    depositDiterima: 0,
+    total: Number(rental.total_sewa || 0),
+    catatan: rental.catatan || "",
+    status: statusTransaksi(rental.status),
+    paymentStatus: paymentStatus(rental),
+    terbayar: Number(rental.total_bayar || 0),
+    dendaKeterlambatan: Number(rental.total_denda || 0),
+    dendaKerusakan: 0,
+    dendaKehilangan: 0,
+  };
+};
+
+export const kategoriApi = {
+  list: async () => mapList((await request<ApiList<ApiCategory>>("/kategori")).data, mapCategory),
+  create: async (category: Omit<Category, "id">) =>
+    mapCategory(
+      (
+        await request<ApiSingle<ApiCategory>>("/kategori", {
+          method: "POST",
+          body: JSON.stringify({
+            kode_kategori: category.kode,
+            nama_kategori: category.nama,
+            deskripsi: category.deskripsi,
+          }),
+        })
+      ).data,
+    ),
+  update: async (category: Category) =>
+    mapCategory(
+      (
+        await request<ApiSingle<ApiCategory>>(`/kategori/${category.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            kode_kategori: category.kode,
+            nama_kategori: category.nama,
+            deskripsi: category.deskripsi,
+          }),
+        })
+      ).data,
+    ),
+};
+
+export const barangApi = {
+  list: async () => mapList((await request<ApiList<ApiItem>>("/barang")).data, mapItem),
+  create: async (item: Omit<Item, "id" | "riwayat">) =>
+    mapItem(
+      (
+        await request<ApiSingle<ApiItem>>("/barang", {
+          method: "POST",
+          body: JSON.stringify({
+            kode_barang: item.kode_barang,
+            nama_barang: item.nama_barang,
+            id_kategori: item.kategoriId,
+            foto: item.foto,
+            harga_sewa_per_hari: item.harga_sewa_per_hari,
+            denda_per_hari: item.denda_per_hari,
+            deposit_default: item.deposit_default,
+            stok_total: item.stok_total,
+            stok_tersedia: item.stok_tersedia,
+            kondisi: kondisiApi(item.kondisi),
+            status_aktif: item.status !== "Maintenance",
+          }),
+        })
+      ).data,
+    ),
+  update: async (item: Item) =>
+    mapItem(
+      (
+        await request<ApiSingle<ApiItem>>(`/barang/${item.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            kode_barang: item.kode_barang,
+            nama_barang: item.nama_barang,
+            id_kategori: item.kategoriId,
+            foto: item.foto,
+            harga_sewa_per_hari: item.harga_sewa_per_hari,
+            denda_per_hari: item.denda_per_hari,
+            deposit_default: item.deposit_default,
+            stok_total: item.stok_total,
+            stok_tersedia: item.stok_tersedia,
+            kondisi: kondisiApi(item.kondisi),
+            status_aktif: item.status !== "Maintenance",
+          }),
+        })
+      ).data,
+    ),
+};
+
+export const customerApi = {
+  list: async () => mapList((await request<ApiList<ApiCustomer>>("/customer")).data, mapCustomer),
+  create: async (customer: Omit<Customer, "id" | "totalTransaksi">) =>
+    mapCustomer(
+      (
+        await request<ApiSingle<ApiCustomer>>("/customer", {
+          method: "POST",
+          body: JSON.stringify({
+            kode_customer: `CUS-${Date.now()}`,
+            nama_customer: customer.nama,
+            no_hp: customer.telepon,
+            email: customer.email,
+            alamat: customer.alamat,
+            nomor_identitas: customer.ktp,
+          }),
+        })
+      ).data,
+    ),
+  update: async (customer: Customer) =>
+    mapCustomer(
+      (
+        await request<ApiSingle<ApiCustomer>>(`/customer/${customer.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            nama_customer: customer.nama,
+            no_hp: customer.telepon,
+            email: customer.email,
+            alamat: customer.alamat,
+            nomor_identitas: customer.ktp,
+          }),
+        })
+      ).data,
+      customer.totalTransaksi,
+    ),
+};
+
+export const rentalApi = {
+  listRaw: async () => (await request<ApiList<ApiRental>>("/rental")).data,
+  create: async (transaction: Omit<Transaction, "id">, customers: Customer[], items: Item[]) => {
+    const customer = customers.find((item) => item.id === transaction.customerId);
+
+    if (!customer) throw new Error("Customer tidak ditemukan");
+
+    return (
+      await request<ApiSingle<ApiRental>>("/rental", {
+        method: "POST",
+        body: JSON.stringify({
+          kode_customer: customer.id.startsWith("CUS-") ? customer.id : undefined,
+          nama_customer: customer.nama,
+          customerId: customer.id,
+          tanggal_mulai: transaction.tanggal_mulai,
+          tanggal_rencana_kembali: transaction.tanggal_rencana_kembali,
+          diskon: transaction.diskon,
+          deposit: transaction.deposit,
+          total_bayar: transaction.terbayar,
+          catatan: transaction.catatan,
+          detail: transaction.items.map((line) => {
+            const item = items.find((barang) => barang.id === line.itemId);
+
+            return {
+              itemId: line.itemId,
+              kode_barang: item?.kode_barang,
+              qty: line.qty,
+              qty_disiapkan: line.qty_disiapkan,
+              qty_keluar: line.qty_keluar,
+              qty_kembali: line.qty_kembali,
+              kondisi_awal: line.kondisi_awal,
+              kondisi_kembali: line.kondisi_kembali,
+              foto_kondisi_awal: line.foto_kondisi_awal || [],
+              foto_kondisi_kembali: line.foto_kondisi_kembali || [],
+              checklist: line.checklist,
+              catatan: line.catatan,
+            };
+          }),
+        }),
+      })
+    ).data;
+  },
+  update: async (transaction: Transaction, customers: Customer[], items: Item[]) => {
+    const customer = customers.find((item) => item.id === transaction.customerId);
+
+    return (
+      await request<ApiSingle<ApiRental>>(`/rental/${transaction.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          customerId: customer?.id,
+          tanggal_mulai: transaction.tanggal_mulai,
+          tanggal_rencana_kembali: transaction.tanggal_rencana_kembali,
+          tanggal_keluar: transaction.tanggal_keluar,
+          tanggal_kembali: transaction.tanggal_kembali,
+          diskon: transaction.diskon,
+          deposit: transaction.deposit,
+          total_bayar: transaction.terbayar,
+          total_denda:
+            transaction.dendaKeterlambatan +
+            transaction.dendaKerusakan +
+            transaction.dendaKehilangan,
+          catatan: transaction.catatan,
+          status: statusApi(transaction.status),
+          detail: transaction.items.map((line) => {
+            const item = items.find((barang) => barang.id === line.itemId);
+
+            return {
+              itemId: line.itemId,
+              kode_barang: item?.kode_barang,
+              qty: line.qty,
+              qty_disiapkan: line.qty_disiapkan,
+              qty_keluar: line.qty_keluar,
+              qty_kembali: line.qty_kembali,
+              kondisi_awal: line.kondisi_awal,
+              kondisi_kembali: line.kondisi_kembali,
+              foto_kondisi_awal: line.foto_kondisi_awal || [],
+              foto_kondisi_kembali: line.foto_kondisi_kembali || [],
+              checklist: line.checklist,
+              catatan: line.catatan,
+            };
+          }),
+        }),
+      })
+    ).data;
+  },
+  setStatus: async (id: string, status: TransactionStatus) =>
+    (
+      await request<ApiSingle<ApiRental>>(`/rental/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: statusApi(status) }),
+      })
+    ).data,
+};
+
+export const pembayaranApi = {
+  listRaw: async () => (await request<ApiList<ApiPayment>>("/pembayaran")).data,
+  create: async (payment: Omit<Payment, "id">, transactions: Transaction[]) => {
+    const transaction = transactions.find((item) => item.id === payment.transaksiId);
+
+    if (!transaction) throw new Error("Transaksi tidak ditemukan");
+
+    return (
+      await request<ApiSingle<ApiPayment>>("/pembayaran", {
+        method: "POST",
+        body: JSON.stringify({
+          kode_rental: transaction.kode,
+          tanggal_bayar: payment.tanggal,
+          tipe_bayar: payment.tipe,
+          metode_bayar: payment.metode,
+          jumlah_bayar: payment.nominal,
+          bukti_bayar: payment.bukti,
+          catatan: payment.catatan,
+        }),
+      })
+    ).data;
+  },
+};
+
+export const uploadApi = {
+  upload: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${API_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const json = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(json?.pesan || "Upload file gagal");
+    }
+
+    return json.data as ApiUpload;
+  },
+};
+
+export const laporanApi = {
+  exportUrl: () => `${API_URL}/laporan/export`,
+};
+
+export const pengaturanApi = {
+  get: async () => (await request<ApiSingle<Pengaturan>>("/pengaturan")).data,
+  update: async (pengaturan: Pengaturan) =>
+    (
+      await request<ApiSingle<Pengaturan>>("/pengaturan", {
+        method: "PUT",
+        body: JSON.stringify(pengaturan),
+      })
+    ).data,
+};
+
+const mapList = <T, R>(list: T[], mapper: (item: T) => R): R[] => list.map(mapper);

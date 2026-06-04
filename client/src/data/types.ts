@@ -1,0 +1,110 @@
+export type ItemStatus = "Tersedia" | "Sebagian Disewa" | "Habis" | "Maintenance";
+
+export type ItemCondition = "Baik" | "Lecet Ringan" | "Rusak Ringan" | "Rusak Berat" | "Hilang";
+
+export type TransactionStatus =
+  | "Draft"
+  | "Booking"
+  | "Siap Keluar"
+  | "Sedang Disewa"
+  | "Serah Terima Kembali"
+  | "Selesai"
+  | "Dibatalkan";
+
+export type PaymentStatus = "Belum Lunas" | "Sebagian" | "Lunas";
+
+export type PaymentType = "DP" | "Pelunasan" | "Denda" | "Pengembalian Deposit";
+
+export type PaymentMethod = "Tunai" | "Transfer" | "QRIS" | "Kartu";
+
+export interface Category {
+  id: string;
+  kode: string;
+  nama: string;
+  deskripsi: string;
+  icon: string;
+}
+
+export interface ItemHistory {
+  id: string;
+  tanggal: string;
+  transaksi: string;
+  customer: string;
+  qty: number;
+  kondisiKembali: ItemCondition;
+}
+
+export interface Item {
+  id: string;
+  kode_barang: string;
+  nama_barang: string;
+  kategoriId: string;
+  foto: string;
+  harga_sewa_per_hari: number;
+  denda_per_hari: number;
+  stok_total: number;
+  stok_tersedia: number;
+  deposit_default: number;
+  status: ItemStatus;
+  kondisi: ItemCondition;
+  riwayat: ItemHistory[];
+}
+
+export interface Customer {
+  id: string;
+  nama: string;
+  telepon: string;
+  email: string;
+  alamat: string;
+  ktp: string;
+  totalTransaksi: number;
+}
+
+export interface TransactionLine {
+  itemId: string;
+  nama: string;
+  qty: number;
+  harga_sewa: number;
+  qty_disiapkan: number;
+  qty_keluar: number;
+  qty_kembali: number;
+  kondisi_awal: ItemCondition;
+  kondisi_kembali: ItemCondition;
+  foto_kondisi_awal?: string[];
+  foto_kondisi_kembali?: string[];
+  checklist: boolean;
+  catatan: string;
+}
+
+export interface Transaction {
+  id: string;
+  kode: string;
+  customerId: string;
+  tanggal_mulai: string;
+  tanggal_rencana_kembali: string;
+  tanggal_keluar: string | null;
+  tanggal_kembali: string | null;
+  items: TransactionLine[];
+  diskon: number;
+  deposit: number;
+  depositDiterima: number;
+  total: number;
+  catatan: string;
+  status: TransactionStatus;
+  paymentStatus: PaymentStatus;
+  terbayar: number;
+  dendaKeterlambatan: number;
+  dendaKerusakan: number;
+  dendaKehilangan: number;
+}
+
+export interface Payment {
+  id: string;
+  transaksiId: string;
+  tanggal: string;
+  tipe: PaymentType;
+  metode: PaymentMethod;
+  nominal: number;
+  bukti: string;
+  catatan: string;
+}
