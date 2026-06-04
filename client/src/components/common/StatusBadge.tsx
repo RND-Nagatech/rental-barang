@@ -21,11 +21,15 @@ const statusTone: Record<string, Tone> = {
   Selesai: "success",
   Dibatalkan: "danger",
   // Pembayaran
+  "Belum Bayar": "danger",
+  "Dibayar Sebagian": "warning",
   "Belum Lunas": "danger",
   Sebagian: "warning",
   Lunas: "success",
   // Barang
   Tersedia: "success",
+  "Disewa Sebagian": "warning",
+  "Full Disewa": "danger",
   "Sebagian Disewa": "warning",
   Habis: "danger",
   Maintenance: "neutral",

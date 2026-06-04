@@ -29,17 +29,30 @@ function Page() {
   const month = ref.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const totalStok = items.filter((i) => catFilter === "all" || i.kategoriId === catFilter).reduce((s, i) => s + i.stok_total, 0);
+  const itemMasukFilter = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    return Boolean(item && (catFilter === "all" || item.kategoriId === catFilter));
+  };
+  const totalStok = items
+    .filter((i) => catFilter === "all" || i.kategoriId === catFilter)
+    .reduce((s, i) => s + i.stok_total - i.stok_maintenance - i.stok_hilang, 0);
 
   function bookingsOn(dateStr: string) {
     return transactions.filter(
-      (t) => ["Booking", "Siap Keluar", "Sedang Disewa"].includes(t.status) &&
-        dateStr >= t.tanggal_mulai && dateStr <= t.tanggal_rencana_kembali &&
-        (catFilter === "all" || t.items.some((l) => items.find((i) => i.id === l.itemId)?.kategoriId === catFilter)),
+      (t) =>
+        ["Booking", "Siap Keluar", "Sedang Disewa"].includes(t.status) &&
+        dateStr >= (t.tanggal_keluar || t.tanggal_mulai) &&
+        dateStr <= t.tanggal_rencana_kembali &&
+        t.items.some((l) => itemMasukFilter(l.itemId)),
     );
   }
   function bookedQty(dateStr: string) {
-    return bookingsOn(dateStr).reduce((s, t) => s + t.items.filter((l) => catFilter === "all" || items.find((i) => i.id === l.itemId)?.kategoriId === catFilter).reduce((a, l) => a + l.qty, 0), 0);
+    return bookingsOn(dateStr).reduce(
+      (s, t) =>
+        s +
+        t.items.filter((l) => itemMasukFilter(l.itemId)).reduce((a, l) => a + l.qty, 0),
+      0,
+    );
   }
 
   const cells = Array.from({ length: firstDay }, () => null).concat(
@@ -123,7 +136,12 @@ function Page() {
                     <span className="text-sm font-semibold">{getCustomer(t.customerId)?.nama}</span>
                     <StatusBadge status={t.status} />
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{t.items.map((l) => `${l.nama} ×${l.qty}`).join(", ")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t.items
+                      .filter((l) => itemMasukFilter(l.itemId))
+                      .map((l) => `${l.nama} ×${l.qty}`)
+                      .join(", ")}
+                  </p>
                 </div>
               ))
             )}

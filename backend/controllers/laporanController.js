@@ -18,7 +18,14 @@ const csvLine = (values) => values.map(csvValue).join(",");
 
 const formatTanggal = (value) => {
   if (!value) return "";
-  return new Date(value).toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+};
+
+const hariIni = () => {
+  const tanggal = new Date();
+  const bulan = String(tanggal.getMonth() + 1).padStart(2, "0");
+  const hari = String(tanggal.getDate()).padStart(2, "0");
+  return `${tanggal.getFullYear()}-${bulan}-${hari}`;
 };
 
 const exportLaporan = asyncHandler(async (req, res) => {
@@ -149,7 +156,7 @@ const exportLaporan = asyncHandler(async (req, res) => {
     );
   });
 
-  const filename = `laporan-rental-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `laporan-rental-${hariIni()}.csv`;
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

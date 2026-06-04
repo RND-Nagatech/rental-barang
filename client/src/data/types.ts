@@ -1,4 +1,4 @@
-export type ItemStatus = "Tersedia" | "Sebagian Disewa" | "Habis" | "Maintenance";
+export type ItemStatus = "Tersedia" | "Disewa Sebagian" | "Full Disewa" | "Maintenance";
 
 export type ItemCondition = "Baik" | "Lecet Ringan" | "Rusak Ringan" | "Rusak Berat" | "Hilang";
 
@@ -11,9 +11,9 @@ export type TransactionStatus =
   | "Selesai"
   | "Dibatalkan";
 
-export type PaymentStatus = "Belum Lunas" | "Sebagian" | "Lunas";
+export type PaymentStatus = "Belum Bayar" | "Dibayar Sebagian" | "Lunas";
 
-export type PaymentType = "DP" | "Pelunasan" | "Denda" | "Pengembalian Deposit";
+export type PaymentType = "DP" | "Tambah DP" | "Pelunasan" | "Denda" | "Refund Deposit";
 
 export type PaymentMethod = "Tunai" | "Transfer" | "QRIS" | "Kartu";
 
@@ -38,12 +38,17 @@ export interface Item {
   id: string;
   kode_barang: string;
   nama_barang: string;
+  satuan: string;
   kategoriId: string;
   foto: string;
   harga_sewa_per_hari: number;
   denda_per_hari: number;
   stok_total: number;
   stok_tersedia: number;
+  stok_di_gudang: number;
+  stok_sedang_keluar: number;
+  stok_maintenance: number;
+  stok_hilang: number;
   deposit_default: number;
   status: ItemStatus;
   kondisi: ItemCondition;
@@ -96,11 +101,15 @@ export interface Transaction {
   dendaKeterlambatan: number;
   dendaKerusakan: number;
   dendaKehilangan: number;
+  metode_pembayaran?: PaymentMethod;
+  nominal_bayar?: number;
+  bukti_pembayaran?: string;
 }
 
 export interface Payment {
   id: string;
   transaksiId: string;
+  kodeRental?: string;
   tanggal: string;
   tipe: PaymentType;
   metode: PaymentMethod;

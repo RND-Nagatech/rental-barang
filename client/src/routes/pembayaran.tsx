@@ -28,7 +28,7 @@ export const Route = createFileRoute("/pembayaran")({
   component: Page,
 });
 
-const TYPES: PaymentType[] = ["DP", "Pelunasan", "Denda", "Pengembalian Deposit"];
+const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan", "Denda", "Refund Deposit"];
 const METHODS: PaymentMethod[] = ["Tunai", "Transfer", "QRIS", "Kartu"];
 
 function Page() {
@@ -37,6 +37,7 @@ function Page() {
   const today = toISODate(new Date());
   const [form, setForm] = React.useState({
     transaksiId: "",
+    kodeRental: "",
     tanggal: today,
     tipe: "DP" as PaymentType,
     metode: "Transfer" as PaymentMethod,
@@ -45,16 +46,23 @@ function Page() {
     catatan: "",
   });
 
-  function save() {
-    if (!form.transaksiId || !form.nominal) return toast.error("Pilih transaksi & isi nominal.");
-    addPayment({ ...form, bukti: form.bukti || "-" });
-    toast.success("Pembayaran dicatat.");
-    setOpen(false);
+  async function save() {
+    if ((!form.transaksiId && !form.kodeRental) || !form.nominal) {
+      return toast.error("Pilih/isi kode rental & isi nominal.");
+    }
+
+    try {
+      await addPayment({ ...form, bukti: form.bukti || "-" });
+      toast.success("Pembayaran dicatat.");
+      setOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal mencatat pembayaran.");
+    }
   }
 
   const txInfo = (id: string) => {
-    const t = transactions.find((x) => x.id === id);
-    return t ? `${t.kode} · ${getCustomer(t.customerId)?.nama}` : "-";
+    const t = transactions.find((x) => x.id === id || x.kode === id);
+    return t ? `${t.kode} · ${getCustomer(t.customerId)?.nama}` : id || "-";
   };
 
   const columns: Column<Payment>[] = [
@@ -125,10 +133,21 @@ function Page() {
 
       <ModalForm open={open} onOpenChange={setOpen} title="Catat Pembayaran" onSubmit={save}>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Transaksi</Label>
+          <Label className="text-xs text-muted-foreground">Kode Rental</Label>
+          <Input
+            value={form.kodeRental}
+            onChange={(e) => setForm({ ...form, kodeRental: e.target.value })}
+            placeholder="RT-260604-001"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Pilih Transaksi</Label>
           <Select
             value={form.transaksiId}
-            onValueChange={(v) => setForm({ ...form, transaksiId: v })}
+            onValueChange={(v) => {
+              const tx = transactions.find((t) => t.id === v);
+              setForm({ ...form, transaksiId: v, kodeRental: tx?.kode || form.kodeRental });
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Pilih transaksi" />

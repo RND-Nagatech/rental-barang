@@ -22,19 +22,19 @@ const rentalSchema = new mongoose.Schema(
       trim: true,
     },
     tanggal_mulai: {
-      type: Date,
+      type: String,
       required: [true, "Tanggal mulai wajib diisi"],
     },
     tanggal_rencana_kembali: {
-      type: Date,
+      type: String,
       required: [true, "Tanggal rencana kembali wajib diisi"],
     },
     tanggal_keluar: {
-      type: Date,
+      type: String,
       default: null,
     },
     tanggal_kembali: {
-      type: Date,
+      type: String,
       default: null,
     },
     status: {

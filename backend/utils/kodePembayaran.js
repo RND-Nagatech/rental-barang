@@ -3,10 +3,12 @@ const Pembayaran = require("../models/pembayaranModel");
 const pad = (value) => String(value).padStart(2, "0");
 
 const buatKodePembayaran = async (tanggal = new Date()) => {
-  const date = new Date(tanggal);
-  const yy = String(date.getFullYear()).slice(-2);
-  const mm = pad(date.getMonth() + 1);
-  const dd = pad(date.getDate());
+  const dateOnly =
+    typeof tanggal === "string"
+      ? tanggal.slice(0, 10)
+      : `${tanggal.getFullYear()}-${pad(tanggal.getMonth() + 1)}-${pad(tanggal.getDate())}`;
+  const [yyyy, mm, dd] = dateOnly.split("-");
+  const yy = String(yyyy).slice(-2);
   const prefix = `BYR-${yy}${mm}${dd}`;
 
   const terakhir = await Pembayaran.findOne({

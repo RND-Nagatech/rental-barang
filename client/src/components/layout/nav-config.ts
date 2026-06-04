@@ -34,8 +34,8 @@ export const navGroups: NavGroup[] = [
   {
     label: "Master Data",
     items: [
-      { title: "Barang", url: "/barang", icon: Package },
       { title: "Kategori", url: "/kategori", icon: Tags },
+      { title: "Barang", url: "/barang", icon: Package },
       { title: "Customer", url: "/customer", icon: Users },
     ],
   },

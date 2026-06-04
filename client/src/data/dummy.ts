@@ -25,7 +25,7 @@ export const items: Item[] = [
   {
     id: "itm-1", kode_barang: "CMP-001", nama_barang: "Tenda Dome Kapasitas 4 Orang", kategoriId: "cat-1",
     foto: "🏕️", harga_sewa_per_hari: 75000, denda_per_hari: 25000, stok_total: 12, stok_tersedia: 8,
-    deposit_default: 200000, status: "Sebagian Disewa", kondisi: "Baik",
+    deposit_default: 200000, status: "Disewa Sebagian", kondisi: "Baik",
     riwayat: [
       { id: "h1", tanggal: dayOffset(-20), transaksi: "TRX-1003", customer: "Budi Santoso", qty: 2, kondisiKembali: "Baik" },
       { id: "h2", tanggal: dayOffset(-45), transaksi: "TRX-0980", customer: "Sari Lestari", qty: 1, kondisiKembali: "Lecet Ringan" },
@@ -34,12 +34,12 @@ export const items: Item[] = [
   {
     id: "itm-2", kode_barang: "CMP-002", nama_barang: "Sleeping Bag Hangat", kategoriId: "cat-1",
     foto: "🛌", harga_sewa_per_hari: 25000, denda_per_hari: 10000, stok_total: 30, stok_tersedia: 22,
-    deposit_default: 50000, status: "Sebagian Disewa", kondisi: "Baik", riwayat: [],
+    deposit_default: 50000, status: "Disewa Sebagian", kondisi: "Baik", riwayat: [],
   },
   {
     id: "itm-3", kode_barang: "WED-001", nama_barang: "Backdrop Bunga Premium", kategoriId: "cat-2",
     foto: "💐", harga_sewa_per_hari: 500000, denda_per_hari: 150000, stok_total: 4, stok_tersedia: 2,
-    deposit_default: 1000000, status: "Sebagian Disewa", kondisi: "Baik",
+    deposit_default: 1000000, status: "Disewa Sebagian", kondisi: "Baik",
     riwayat: [
       { id: "h3", tanggal: dayOffset(-10), transaksi: "TRX-1010", customer: "Maya Putri", qty: 1, kondisiKembali: "Baik" },
     ],
@@ -47,12 +47,12 @@ export const items: Item[] = [
   {
     id: "itm-4", kode_barang: "WED-002", nama_barang: "Kursi Tiffany Gold", kategoriId: "cat-2",
     foto: "🪑", harga_sewa_per_hari: 15000, denda_per_hari: 8000, stok_total: 200, stok_tersedia: 140,
-    deposit_default: 30000, status: "Sebagian Disewa", kondisi: "Baik", riwayat: [],
+    deposit_default: 30000, status: "Disewa Sebagian", kondisi: "Baik", riwayat: [],
   },
   {
     id: "itm-5", kode_barang: "ATR-001", nama_barang: "Gaun Pengantin Mewah", kategoriId: "cat-3",
     foto: "👰", harga_sewa_per_hari: 350000, denda_per_hari: 100000, stok_total: 6, stok_tersedia: 4,
-    deposit_default: 1500000, status: "Sebagian Disewa", kondisi: "Baik",
+    deposit_default: 1500000, status: "Disewa Sebagian", kondisi: "Baik",
     riwayat: [
       { id: "h4", tanggal: dayOffset(-30), transaksi: "TRX-0995", customer: "Dewi Anggraini", qty: 1, kondisiKembali: "Baik" },
     ],
@@ -65,7 +65,7 @@ export const items: Item[] = [
   {
     id: "itm-7", kode_barang: "SND-001", nama_barang: "Speaker Aktif 15 inch", kategoriId: "cat-4",
     foto: "🔊", harga_sewa_per_hari: 250000, denda_per_hari: 75000, stok_total: 8, stok_tersedia: 3,
-    deposit_default: 1000000, status: "Sebagian Disewa", kondisi: "Baik",
+    deposit_default: 1000000, status: "Disewa Sebagian", kondisi: "Baik",
     riwayat: [
       { id: "h5", tanggal: dayOffset(-5), transaksi: "TRX-1020", customer: "Andi Wijaya", qty: 2, kondisiKembali: "Baik" },
     ],
@@ -78,12 +78,12 @@ export const items: Item[] = [
   {
     id: "itm-9", kode_barang: "PRT-001", nama_barang: "Tenda Roder 5x10m", kategoriId: "cat-5",
     foto: "⛺", harga_sewa_per_hari: 1200000, denda_per_hari: 300000, stok_total: 3, stok_tersedia: 0,
-    deposit_default: 2000000, status: "Habis", kondisi: "Baik", riwayat: [],
+    deposit_default: 2000000, status: "Full Disewa", kondisi: "Baik", riwayat: [],
   },
   {
     id: "itm-10", kode_barang: "PRT-002", nama_barang: "Meja Bulat 10 Orang", kategoriId: "cat-5",
     foto: "🟤", harga_sewa_per_hari: 50000, denda_per_hari: 20000, stok_total: 40, stok_tersedia: 28,
-    deposit_default: 100000, status: "Sebagian Disewa", kondisi: "Baik", riwayat: [],
+    deposit_default: 100000, status: "Disewa Sebagian", kondisi: "Baik", riwayat: [],
   },
   {
     id: "itm-11", kode_barang: "SND-003", nama_barang: "Lampu Par LED Panggung", kategoriId: "cat-4",
@@ -126,7 +126,7 @@ export const transactions: Transaction[] = [
     tanggal_keluar: null, tanggal_kembali: null,
     items: [line("itm-1", "Tenda Dome Kapasitas 4 Orang", 2, 75000), line("itm-2", "Sleeping Bag Hangat", 4, 25000)],
     diskon: 0, deposit: 500000, depositDiterima: 0, total: 750000,
-    catatan: "Untuk acara camping keluarga", status: "Draft", paymentStatus: "Belum Lunas",
+    catatan: "Untuk acara camping keluarga", status: "Draft", paymentStatus: "Belum Bayar",
     terbayar: 0, dendaKeterlambatan: 0, dendaKerusakan: 0, dendaKehilangan: 0,
   },
   {
@@ -135,7 +135,7 @@ export const transactions: Transaction[] = [
     tanggal_keluar: null, tanggal_kembali: null,
     items: [line("itm-3", "Backdrop Bunga Premium", 1, 500000), line("itm-4", "Kursi Tiffany Gold", 50, 15000)],
     diskon: 100000, deposit: 1500000, depositDiterima: 750000, total: 2150000,
-    catatan: "Dekorasi pernikahan outdoor", status: "Booking", paymentStatus: "Sebagian",
+    catatan: "Dekorasi pernikahan outdoor", status: "Booking", paymentStatus: "Dibayar Sebagian",
     terbayar: 750000, dendaKeterlambatan: 0, dendaKerusakan: 0, dendaKehilangan: 0,
   },
   {
@@ -144,7 +144,7 @@ export const transactions: Transaction[] = [
     tanggal_keluar: null, tanggal_kembali: null,
     items: [line("itm-5", "Gaun Pengantin Mewah", 1, 350000, { qty_disiapkan: 1, checklist: true })],
     diskon: 0, deposit: 1500000, depositDiterima: 0, total: 700000,
-    catatan: "Fitting sudah dilakukan", status: "Siap Keluar", paymentStatus: "Sebagian",
+    catatan: "Fitting sudah dilakukan", status: "Siap Keluar", paymentStatus: "Dibayar Sebagian",
     terbayar: 350000, dendaKeterlambatan: 0, dendaKerusakan: 0, dendaKehilangan: 0,
   },
   {
@@ -162,7 +162,7 @@ export const transactions: Transaction[] = [
     tanggal_keluar: dayOffset(-7), tanggal_kembali: null,
     items: [line("itm-10", "Meja Bulat 10 Orang", 10, 50000, { qty_disiapkan: 10, qty_keluar: 10, checklist: true })],
     diskon: 0, deposit: 1000000, depositDiterima: 1000000, total: 2500000,
-    catatan: "Terlambat dihubungi customer", status: "Sedang Disewa", paymentStatus: "Sebagian",
+    catatan: "Terlambat dihubungi customer", status: "Sedang Disewa", paymentStatus: "Dibayar Sebagian",
     terbayar: 1250000, dendaKeterlambatan: 0, dendaKerusakan: 0, dendaKehilangan: 0,
   },
   {

@@ -138,6 +138,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         const created = mapRental(createdRaw, customers, items);
         setTransactions((prev) => [created, ...prev]);
         setCustomers((prev) => hitungTotalTransaksi(prev, [created, ...transactions]));
+
+        const [itemList, paymentRaw] = await Promise.all([
+          barangApi.list(),
+          pembayaranApi.listRaw(),
+        ]);
+        setItems(itemList);
+        setPayments(paymentRaw.map((payment) => mapPayment(payment, [created, ...transactions])));
       },
       updateTransaction: async (t) => {
         const transaksiSaatIni = transactions.find((item) => item.id === t.id);

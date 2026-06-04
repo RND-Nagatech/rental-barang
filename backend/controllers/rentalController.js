@@ -2,8 +2,11 @@ const Rental = require("../models/rentalModel");
 const RentalDetail = require("../models/rentalDetailModel");
 const Barang = require("../models/barangModel");
 const Customer = require("../models/customerModel");
+const Pembayaran = require("../models/pembayaranModel");
 const asyncHandler = require("../utils/asyncHandler");
 const buatKodeRental = require("../utils/kodeRental");
+const buatKodePembayaran = require("../utils/kodePembayaran");
+const { recalculateStokBarang } = require("../utils/recalculateStokBarang");
 const {
   normalisasiStatus,
   validasiStatus,
@@ -12,9 +15,26 @@ const {
 
 const ambilDetailPayload = (body) => body.detail || body.details || body.items || [];
 
+const toDateOnly = (value) => {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+};
+
+const hariIni = () => {
+  const tanggal = new Date();
+  const bulan = String(tanggal.getMonth() + 1).padStart(2, "0");
+  const hari = String(tanggal.getDate()).padStart(2, "0");
+  return `${tanggal.getFullYear()}-${bulan}-${hari}`;
+};
+
+const rentangOverlap = (mulaiA, selesaiA, mulaiB, selesaiB) =>
+  toDateOnly(mulaiA) <= toDateOnly(selesaiB) && toDateOnly(selesaiA) >= toDateOnly(mulaiB);
+
 const hitungJumlahHari = (tanggalMulai, tanggalKembali) => {
-  const mulai = new Date(tanggalMulai);
-  const kembali = new Date(tanggalKembali);
+  const [tahunMulai, bulanMulai, hariMulai] = toDateOnly(tanggalMulai).split("-").map(Number);
+  const [tahunKembali, bulanKembali, hariKembali] = toDateOnly(tanggalKembali).split("-").map(Number);
+  const mulai = new Date(tahunMulai, bulanMulai - 1, hariMulai);
+  const kembali = new Date(tahunKembali, bulanKembali - 1, hariKembali);
   const selisih = kembali.getTime() - mulai.getTime();
   const hari = Math.ceil(selisih / (1000 * 60 * 60 * 24));
   return Math.max(1, hari || 1);
@@ -44,7 +64,28 @@ const cariBarang = async (line) => {
   return null;
 };
 
-const siapkanDetail = async (detailPayload, tanggalMulai, tanggalKembali) => {
+const hitungQtyTerkunciKalender = async (kodeBarang, tanggalKeluar, tanggalRencanaKembali, kodeRentalAbaikan) => {
+  const rentals = await Rental.find({
+    status: { $in: ["booking", "siap_keluar", "sedang_disewa"] },
+    ...(kodeRentalAbaikan ? { kode_rental: { $ne: kodeRentalAbaikan } } : {}),
+  }).select("kode_rental tanggal_mulai tanggal_keluar tanggal_rencana_kembali");
+  const rentalsOverlap = rentals.filter((rental) => {
+    const mulai = rental.tanggal_keluar || rental.tanggal_mulai;
+    return rentangOverlap(mulai, rental.tanggal_rencana_kembali, tanggalKeluar, tanggalRencanaKembali);
+  });
+  const kodeRental = rentalsOverlap.map((rental) => rental.kode_rental);
+
+  if (kodeRental.length === 0) return 0;
+
+  const details = await RentalDetail.find({
+    kode_rental: { $in: kodeRental },
+    kode_barang: kodeBarang,
+  });
+
+  return details.reduce((sum, detail) => sum + Number(detail.qty || 0), 0);
+};
+
+const siapkanDetail = async (detailPayload, tanggalMulai, tanggalKembali, opsi = {}) => {
   if (!Array.isArray(detailPayload) || detailPayload.length === 0) {
     const error = new Error("Detail barang wajib diisi");
     error.statusCode = 400;
@@ -71,9 +112,23 @@ const siapkanDetail = async (detailPayload, tanggalMulai, tanggalKembali) => {
       throw error;
     }
 
-    if (qty > barang.stok_tersedia) {
+    const qtyTerkunci = await hitungQtyTerkunciKalender(
+      barang.kode_barang,
+      tanggalMulai,
+      tanggalKembali,
+      opsi.kodeRentalAbaikan
+    );
+    const stokTersediaUntukValidasi = Math.max(
+      0,
+      Number(barang.stok_total || 0) -
+        Number(barang.stok_maintenance || 0) -
+        Number(barang.stok_hilang || 0) -
+        qtyTerkunci
+    );
+
+    if (qty > stokTersediaUntukValidasi) {
       const error = new Error(
-        `Qty ${barang.nama_barang} melebihi stok tersedia (${barang.stok_tersedia})`
+        `Qty ${barang.nama_barang} melebihi stok tersedia (${stokTersediaUntukValidasi})`
       );
       error.statusCode = 400;
       throw error;
@@ -150,26 +205,9 @@ const hitungTotal = (detail, body = {}) => {
   };
 };
 
-const sinkronStokStatus = async (kodeRental, statusTujuan) => {
-  const detail = await RentalDetail.find({ kode_rental: kodeRental });
-
-  if (statusTujuan === "sedang_disewa") {
-    for (const line of detail) {
-      await Barang.updateOne(
-        { kode_barang: line.kode_barang },
-        { $inc: { stok_tersedia: -Number(line.qty_keluar || line.qty || 0) } }
-      );
-    }
-  }
-
-  if (statusTujuan === "serah_terima_kembali") {
-    for (const line of detail) {
-      await Barang.updateOne(
-        { kode_barang: line.kode_barang },
-        { $inc: { stok_tersedia: Number(line.qty_kembali || 0) } }
-      );
-    }
-  }
+const ambilKodeBarangRental = async (kodeRental) => {
+  const detail = await RentalDetail.find({ kode_rental: kodeRental }).select("kode_barang");
+  return detail.map((item) => item.kode_barang);
 };
 
 const kirimRental = async (res, rental, statusCode = 200, pesan = "Data berhasil diambil") => {
@@ -249,7 +287,7 @@ const tambahRental = asyncHandler(async (req, res) => {
   const detail = await siapkanDetail(ambilDetailPayload(req.body), tanggalMulai, tanggalKembali);
   const total = hitungTotal(detail, req.body);
   const kodeRental = req.body.kode_rental || (await buatKodeRental(tanggalMulai));
-  const status = normalisasiStatus(req.body.status || "draft");
+  const status = normalisasiStatus(req.body.status || "booking");
 
   if (!validasiStatus(status)) {
     res.status(400);
@@ -262,7 +300,7 @@ const tambahRental = asyncHandler(async (req, res) => {
     nama_customer: customer.nama_customer,
     tanggal_mulai: tanggalMulai,
     tanggal_rencana_kembali: tanggalKembali,
-    tanggal_keluar: req.body.tanggal_keluar || null,
+    tanggal_keluar: req.body.tanggal_keluar || tanggalMulai,
     tanggal_kembali: req.body.tanggal_kembali || null,
     status,
     ...total,
@@ -275,6 +313,34 @@ const tambahRental = asyncHandler(async (req, res) => {
       ...item,
     }))
   );
+
+  if (Number(req.body.nominal_bayar || req.body.total_bayar || 0) > 0) {
+    const jumlahBayar = Number(req.body.nominal_bayar || req.body.total_bayar || 0);
+
+    await Pembayaran.create({
+      kode_pembayaran: await buatKodePembayaran(req.body.tanggal_bayar || hariIni()),
+      kode_rental: rental.kode_rental,
+      tanggal_bayar: req.body.tanggal_bayar || hariIni(),
+      tipe_bayar: req.body.jenis_pembayaran
+        ? String(req.body.jenis_pembayaran).toLowerCase().replace(/\s+/g, "_")
+        : jumlahBayar >= rental.total_sewa
+          ? "pelunasan"
+          : "dp",
+      metode_bayar: String(req.body.metode_pembayaran || "tunai").toLowerCase(),
+      jumlah_bayar: jumlahBayar,
+      bukti_bayar: req.body.bukti_pembayaran || null,
+      catatan: req.body.catatan_pembayaran || null,
+    });
+
+    rental.total_bayar = jumlahBayar;
+    rental.sisa_tagihan = Math.max(
+      0,
+      Number(rental.total_sewa || 0) + Number(rental.total_denda || 0) - jumlahBayar
+    );
+    await rental.save();
+  }
+
+  await recalculateStokBarang(detail.map((item) => item.kode_barang));
 
   await kirimRental(res, rental, 201, "Rental berhasil dibuat");
 });
@@ -293,9 +359,15 @@ const ubahRental = asyncHandler(async (req, res) => {
   const tanggalMulai = req.body.tanggal_mulai || rental.tanggal_mulai;
   const tanggalKembali = req.body.tanggal_rencana_kembali || rental.tanggal_rencana_kembali;
   const detailPayload = ambilDetailPayload(req.body);
+  const detailSebelumnya = await RentalDetail.find({ kode_rental: rental.kode_rental });
+  const detailPayloadDenganQtySebelumnya = detailPayload.map((item) => ({
+    ...item,
+  }));
   const detail = detailPayload.length
-    ? await siapkanDetail(detailPayload, tanggalMulai, tanggalKembali)
-    : await RentalDetail.find({ kode_rental: rental.kode_rental });
+    ? await siapkanDetail(detailPayloadDenganQtySebelumnya, tanggalMulai, tanggalKembali, {
+        kodeRentalAbaikan: rental.kode_rental,
+      })
+    : detailSebelumnya;
   const total = hitungTotal(detail, req.body);
   const statusTujuan = req.body.status ? normalisasiStatus(req.body.status) : rental.status;
   const statusSebelum = rental.status;
@@ -326,11 +398,11 @@ const ubahRental = asyncHandler(async (req, res) => {
   rental.status = statusTujuan;
 
   if (statusTujuan === "sedang_disewa") {
-    rental.tanggal_keluar = req.body.tanggal_keluar || rental.tanggal_keluar || new Date();
+    rental.tanggal_keluar = req.body.tanggal_keluar || rental.tanggal_keluar || hariIni();
   }
 
   if (statusTujuan === "serah_terima_kembali" || statusTujuan === "selesai") {
-    rental.tanggal_kembali = req.body.tanggal_kembali || rental.tanggal_kembali || new Date();
+    rental.tanggal_kembali = req.body.tanggal_kembali || rental.tanggal_kembali || hariIni();
   }
 
   await rental.save();
@@ -345,9 +417,11 @@ const ubahRental = asyncHandler(async (req, res) => {
     );
   }
 
-  if (statusTujuan !== statusSebelum) {
-    await sinkronStokStatus(rental.kode_rental, statusTujuan);
-  }
+  const kodeBarangBerubah = [
+    ...detailSebelumnya.map((item) => item.kode_barang),
+    ...detail.map((item) => item.kode_barang),
+  ];
+  await recalculateStokBarang(kodeBarangBerubah);
 
   await kirimRental(res, rental, 200, "Rental berhasil diubah");
 });
@@ -360,7 +434,9 @@ const hapusRental = asyncHandler(async (req, res) => {
     throw new Error("Rental tidak ditemukan");
   }
 
+  const kodeBarangRental = await ambilKodeBarangRental(rental.kode_rental);
   await RentalDetail.deleteMany({ kode_rental: rental.kode_rental });
+  await recalculateStokBarang(kodeBarangRental);
 
   res.json({
     sukses: true,
@@ -388,15 +464,15 @@ const ubahStatusRental = asyncHandler(async (req, res) => {
   rental.status = statusTujuan;
 
   if (statusTujuan === "sedang_disewa") {
-    rental.tanggal_keluar = req.body.tanggal_keluar || new Date();
+    rental.tanggal_keluar = req.body.tanggal_keluar || hariIni();
   }
 
   if (statusTujuan === "serah_terima_kembali" || statusTujuan === "selesai") {
-    rental.tanggal_kembali = req.body.tanggal_kembali || new Date();
+    rental.tanggal_kembali = req.body.tanggal_kembali || hariIni();
   }
 
   await rental.save();
-  await sinkronStokStatus(rental.kode_rental, statusTujuan);
+  await recalculateStokBarang(await ambilKodeBarangRental(rental.kode_rental));
   await kirimRental(res, rental, 200, "Status rental berhasil diubah");
 });
 

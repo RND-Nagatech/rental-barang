@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { ImageUploader } from "@/components/common/ImageUploader";
+import { absoluteFileUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +59,7 @@ function Page() {
           t={selected}
           customer={getCustomer(selected.customerId)?.nama ?? "-"}
           getDenda={(id) => getItem(id)?.denda_per_hari ?? 0}
+          satuan={(id) => getItem(id)?.satuan || "unit"}
           onDone={updateTransaction}
         />
       )}
@@ -69,11 +71,13 @@ function KembaliForm({
   t,
   customer,
   getDenda,
+  satuan,
   onDone,
 }: {
   t: Transaction;
   customer: string;
   getDenda: (id: string) => number;
+  satuan: (id: string) => string;
   onDone: (t: Transaction) => void;
 }) {
   const navigate = useNavigate();
@@ -85,7 +89,6 @@ function KembaliForm({
       ...l,
       qty_kembali: l.qty_keluar || l.qty,
       kondisi_kembali: "Baik" as ItemCondition,
-      catatan: "",
     })),
   );
   const [biayaKerusakan, setBiayaKerusakan] = React.useState(0);
@@ -108,7 +111,7 @@ function KembaliForm({
       dendaKeterlambatan: dendaTerlambat,
       dendaKerusakan: biayaKerusakan,
       dendaKehilangan: biayaKehilangan,
-      paymentStatus: sisaTagihan > 0 ? "Sebagian" : "Lunas",
+      paymentStatus: sisaTagihan > 0 ? "Dibayar Sebagian" : "Lunas",
     });
     toast.success(`${t.kode} → Selesai.`);
     navigate({ to: "/transaksi" });
@@ -131,10 +134,34 @@ function KembaliForm({
         {lines.map((l, idx) => (
           <div key={l.itemId} className="rounded-lg border bg-card p-3">
             <p className="text-sm font-semibold">{l.nama}</p>
+            <div className="mt-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+              <p>
+                Kondisi awal: <span className="font-medium text-foreground">{l.kondisi_awal}</span>
+              </p>
+              <p>
+                Catatan awal: <span className="text-foreground">{l.catatan || "-"}</span>
+              </p>
+              {l.foto_kondisi_awal?.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {l.foto_kondisi_awal.map((foto, index) => (
+                    <a
+                      key={foto}
+                      href={absoluteFileUrl(foto)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border bg-card px-2 py-1 hover:text-primary"
+                    >
+                      Foto awal {index + 1}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-4">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Qty Keluar</Label>
                 <Input type="number" className="h-9" value={l.qty_keluar || l.qty} disabled />
+                <p className="text-xs text-muted-foreground">{satuan(l.itemId)}</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Qty Kembali</Label>
@@ -148,6 +175,7 @@ function KembaliForm({
                     )
                   }
                 />
+                <p className="text-xs text-muted-foreground">{satuan(l.itemId)}</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Kondisi Awal</Label>

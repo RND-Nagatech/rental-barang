@@ -29,7 +29,7 @@ export const Route = createFileRoute("/serah-terima-keluar")({
 const CONDITIONS: ItemCondition[] = ["Baik", "Lecet Ringan", "Rusak Ringan"];
 
 function Page() {
-  const { transactions, getCustomer, updateTransaction } = useStore();
+  const { transactions, getCustomer, getItem, updateTransaction } = useStore();
   const list = transactions.filter((t) => t.status === "Siap Keluar");
 
   return (
@@ -49,6 +49,7 @@ function Page() {
               key={t.id}
               t={t}
               customer={getCustomer(t.customerId)?.nama ?? "-"}
+              satuan={(id) => getItem(id)?.satuan || "unit"}
               onSubmit={updateTransaction}
             />
           ))}
@@ -61,10 +62,12 @@ function Page() {
 function KeluarCard({
   t,
   customer,
+  satuan,
   onSubmit,
 }: {
   t: Transaction;
   customer: string;
+  satuan: (id: string) => string;
   onSubmit: (t: Transaction) => void;
 }) {
   const [lines, setLines] = React.useState(
@@ -77,6 +80,18 @@ function KeluarCard({
   const [depositDiterima, setDepositDiterima] = React.useState(t.deposit);
 
   function submit() {
+    const invalidLine = lines.find(
+      (line) =>
+        !line.kondisi_awal ||
+        !line.foto_kondisi_awal?.length ||
+        Number(line.qty_keluar || 0) <= 0,
+    );
+
+    if (invalidLine) {
+      toast.error("Qty keluar, kondisi awal, dan foto awal wajib diisi untuk semua barang.");
+      return;
+    }
+
     onSubmit({
       ...t,
       items: lines,
@@ -104,7 +119,9 @@ function KeluarCard({
             <div key={l.itemId} className="rounded-lg border bg-card p-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{l.nama}</p>
-                <span className="text-xs text-muted-foreground">Qty pesan: {l.qty}</span>
+                <span className="text-xs text-muted-foreground">
+                  Qty pesan: {l.qty} {satuan(l.itemId)}
+                </span>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">

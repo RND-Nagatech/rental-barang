@@ -3,10 +3,20 @@ const Rental = require("../models/rentalModel");
 const asyncHandler = require("../utils/asyncHandler");
 const buatKodePembayaran = require("../utils/kodePembayaran");
 
+const hariIni = () => {
+  const tanggal = new Date();
+  const bulan = String(tanggal.getMonth() + 1).padStart(2, "0");
+  const hari = String(tanggal.getDate()).padStart(2, "0");
+  return `${tanggal.getFullYear()}-${bulan}-${hari}`;
+};
+
 const normalisasiTipeBayar = (tipe) =>
   String(tipe || "dp")
     .trim()
     .toLowerCase()
+    .replace(/pengembalian_deposit/g, "refund_deposit")
+    .replace(/refund deposit/g, "refund_deposit")
+    .replace(/tambah dp/g, "tambah_dp")
     .replace(/\s+/g, "_");
 
 const normalisasiMetodeBayar = (metode) =>
@@ -54,9 +64,10 @@ const tambahPembayaran = asyncHandler(async (req, res) => {
 
   const pembayaran = await Pembayaran.create({
     kode_pembayaran:
-      req.body.kode_pembayaran || (await buatKodePembayaran(req.body.tanggal_bayar)),
+      req.body.kode_pembayaran ||
+      (await buatKodePembayaran(req.body.tanggal_bayar || req.body.tanggal || hariIni())),
     kode_rental: rental.kode_rental,
-    tanggal_bayar: req.body.tanggal_bayar || req.body.tanggal || new Date(),
+    tanggal_bayar: req.body.tanggal_bayar || req.body.tanggal || hariIni(),
     tipe_bayar: normalisasiTipeBayar(req.body.tipe_bayar || req.body.tipe),
     metode_bayar: normalisasiMetodeBayar(req.body.metode_bayar || req.body.metode),
     jumlah_bayar: jumlahBayar,
@@ -65,14 +76,16 @@ const tambahPembayaran = asyncHandler(async (req, res) => {
     catatan: req.body.catatan || null,
   });
 
-  rental.total_bayar = Number(rental.total_bayar || 0) + jumlahBayar;
-  rental.sisa_tagihan = Math.max(
-    0,
-    Number(rental.total_sewa || 0) +
-      Number(rental.total_denda || 0) -
-      Number(rental.total_bayar || 0)
-  );
-  await rental.save();
+  if (pembayaran.tipe_bayar !== "refund_deposit") {
+    rental.total_bayar = Number(rental.total_bayar || 0) + jumlahBayar;
+    rental.sisa_tagihan = Math.max(
+      0,
+      Number(rental.total_sewa || 0) +
+        Number(rental.total_denda || 0) -
+        Number(rental.total_bayar || 0)
+    );
+    await rental.save();
+  }
 
   res.status(201).json({
     sukses: true,

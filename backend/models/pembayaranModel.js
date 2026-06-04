@@ -1,6 +1,13 @@
 const mongoose = require("mongoose");
 const { commonFields, schemaOptions } = require("./commonFields");
 
+const hariIni = () => {
+  const tanggal = new Date();
+  const bulan = String(tanggal.getMonth() + 1).padStart(2, "0");
+  const hari = String(tanggal.getDate()).padStart(2, "0");
+  return `${tanggal.getFullYear()}-${bulan}-${hari}`;
+};
+
 const pembayaranSchema = new mongoose.Schema(
   {
     kode_pembayaran: {
@@ -17,13 +24,13 @@ const pembayaranSchema = new mongoose.Schema(
       uppercase: true,
     },
     tanggal_bayar: {
-      type: Date,
+      type: String,
       required: [true, "Tanggal bayar wajib diisi"],
-      default: Date.now,
+      default: hariIni,
     },
     tipe_bayar: {
       type: String,
-      enum: ["dp", "pelunasan", "denda", "pengembalian_deposit"],
+      enum: ["dp", "tambah_dp", "pelunasan", "denda", "refund_deposit"],
       default: "dp",
     },
     metode_bayar: {

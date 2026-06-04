@@ -11,6 +11,7 @@ import { ModalForm } from "@/components/common/ModalForm";
 import { DetailDrawer } from "@/components/common/DetailDrawer";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { ImageUploader } from "@/components/common/ImageUploader";
+import { absoluteFileUrl, pengaturanApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/barang")({
   component: BarangPage,
 });
 
-const STATUSES: ItemStatus[] = ["Tersedia", "Sebagian Disewa", "Habis", "Maintenance"];
+const STATUSES: ItemStatus[] = ["Tersedia", "Disewa Sebagian", "Full Disewa", "Maintenance"];
 const CONDITIONS: ItemCondition[] = [
   "Baik",
   "Lecet Ringan",
@@ -41,12 +42,17 @@ const CONDITIONS: ItemCondition[] = [
 const emptyForm = (kategoriId: string): Omit<Item, "id" | "riwayat"> => ({
   kode_barang: "",
   nama_barang: "",
+  satuan: "unit",
   kategoriId,
   foto: "📦",
   harga_sewa_per_hari: 0,
   denda_per_hari: 0,
   stok_total: 1,
   stok_tersedia: 1,
+  stok_di_gudang: 1,
+  stok_sedang_keluar: 0,
+  stok_maintenance: 0,
+  stok_hilang: 0,
   deposit_default: 0,
   status: "Tersedia",
   kondisi: "Baik",
@@ -54,12 +60,20 @@ const emptyForm = (kategoriId: string): Omit<Item, "id" | "riwayat"> => ({
 
 function BarangPage() {
   const { items, categories, getCategory, addItem, updateItem } = useStore();
+  const [defaultDenda, setDefaultDenda] = React.useState(0);
   const [catFilter, setCatFilter] = React.useState("all");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Item | null>(null);
   const [form, setForm] = React.useState(emptyForm(categories[0]?.id ?? ""));
   const [detail, setDetail] = React.useState<Item | null>(null);
+
+  React.useEffect(() => {
+    pengaturanApi
+      .get()
+      .then((data) => setDefaultDenda(data.denda_keterlambatan_default))
+      .catch(() => setDefaultDenda(0));
+  }, []);
 
   const filtered = items.filter(
     (i) =>
@@ -69,7 +83,10 @@ function BarangPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm(emptyForm(categories[0]?.id ?? ""));
+    setForm({
+      ...emptyForm(categories[0]?.id ?? ""),
+      denda_per_hari: defaultDenda,
+    });
     setFormOpen(true);
   }
 
@@ -102,7 +119,7 @@ function BarangPage() {
       render: (i) => (
         <div className="flex items-center gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-lg">
-            {i.foto}
+            <FotoBarang foto={i.foto} className="size-10 rounded-lg" />
           </span>
           <div className="min-w-0">
             <p className="truncate font-semibold">{i.nama_barang}</p>
@@ -117,12 +134,13 @@ function BarangPage() {
       render: (i) => <Badge variant="secondary">{getCategory(i.kategoriId)?.nama}</Badge>,
     },
     { key: "harga", header: "Sewa/hari", render: (i) => formatRupiah(i.harga_sewa_per_hari) },
+    { key: "satuan", header: "Satuan", render: (i) => i.satuan },
     {
       key: "stok",
-      header: "Stok",
+      header: "Stok Gudang",
       render: (i) => (
         <span className="font-medium">
-          {formatNumber(i.stok_tersedia)}
+          {formatNumber(i.stok_di_gudang)}
           <span className="text-muted-foreground"> / {formatNumber(i.stok_total)}</span>
         </span>
       ),
@@ -218,6 +236,20 @@ function BarangPage() {
               placeholder="Nama barang"
             />
           </Field>
+          <Field label="Satuan">
+            <Select value={form.satuan} onValueChange={(v) => setForm({ ...form, satuan: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["pcs", "unit", "set", "lusin", "pasang", "box", "meter"].map((satuan) => (
+                  <SelectItem key={satuan} value={satuan}>
+                    {satuan}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Kategori">
             <Select
               value={form.kategoriId}
@@ -268,14 +300,42 @@ function BarangPage() {
             <Input
               type="number"
               value={form.stok_total}
-              onChange={(e) => setForm({ ...form, stok_total: +e.target.value })}
+              onChange={(e) => {
+                const stokTotal = +e.target.value;
+                setForm({
+                  ...form,
+                  stok_total: stokTotal,
+                  stok_di_gudang: editing ? form.stok_di_gudang : stokTotal,
+                  stok_tersedia: editing ? form.stok_tersedia : stokTotal,
+                });
+              }}
             />
           </Field>
-          <Field label="Stok Tersedia">
+          <Field label="Stok di Gudang">
             <Input
               type="number"
-              value={form.stok_tersedia}
-              onChange={(e) => setForm({ ...form, stok_tersedia: +e.target.value })}
+              value={form.stok_di_gudang}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  stok_di_gudang: +e.target.value,
+                  stok_tersedia: +e.target.value,
+                })
+              }
+            />
+          </Field>
+          <Field label="Stok Maintenance">
+            <Input
+              type="number"
+              value={form.stok_maintenance}
+              onChange={(e) => setForm({ ...form, stok_maintenance: +e.target.value })}
+            />
+          </Field>
+          <Field label="Stok Hilang">
+            <Input
+              type="number"
+              value={form.stok_hilang}
+              onChange={(e) => setForm({ ...form, stok_hilang: +e.target.value })}
             />
           </Field>
           <Field label="Deposit Default">
@@ -320,9 +380,7 @@ function BarangPage() {
         {detail && (
           <div className="space-y-6">
             <div className="flex items-center gap-4">
-              <span className="grid size-16 place-items-center rounded-xl bg-muted text-3xl">
-                {detail.foto}
-              </span>
+              <FotoBarang foto={detail.foto} className="size-16 rounded-xl" />
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={detail.status} />
                 <StatusBadge status={detail.kondisi} />
@@ -331,11 +389,15 @@ function BarangPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <Info label="Kategori" value={getCategory(detail.kategoriId)?.nama ?? "-"} />
+              <Info label="Satuan" value={detail.satuan} />
               <Info label="Sewa / Hari" value={formatRupiah(detail.harga_sewa_per_hari)} />
               <Info label="Denda / Hari" value={formatRupiah(detail.denda_per_hari)} />
               <Info label="Deposit" value={formatRupiah(detail.deposit_default)} />
               <Info label="Stok Total" value={formatNumber(detail.stok_total)} />
-              <Info label="Stok Tersedia" value={formatNumber(detail.stok_tersedia)} />
+              <Info label="Stok Gudang" value={formatNumber(detail.stok_di_gudang)} />
+              <Info label="Sedang Keluar" value={formatNumber(detail.stok_sedang_keluar)} />
+              <Info label="Maintenance" value={formatNumber(detail.stok_maintenance)} />
+              <Info label="Hilang" value={formatNumber(detail.stok_hilang)} />
             </div>
 
             <div>
@@ -382,5 +444,19 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-sm font-semibold">{value}</p>
     </div>
+  );
+}
+
+function FotoBarang({ foto, className }: { foto: string; className?: string }) {
+  const isFile = Boolean(foto && (foto.startsWith("/uploads/") || /^https?:\/\//.test(foto)));
+
+  if (isFile) {
+    return <img src={absoluteFileUrl(foto)} alt="" className={`${className ?? ""} object-cover`} />;
+  }
+
+  return (
+    <span className={`grid place-items-center bg-muted text-lg ${className ?? ""}`}>
+      {foto || "📦"}
+    </span>
   );
 }

@@ -12,7 +12,9 @@ export function formatNumber(value: number): string {
 
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "-";
-  const d = typeof value === "string" ? new Date(value) : value;
+  const d = typeof value === "string" ? parseDateOnly(value) : value;
+  if (Number.isNaN(d.getTime())) return "-";
+
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -22,7 +24,9 @@ export function formatDate(value: string | Date | null | undefined): string {
 
 export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return "-";
-  const d = typeof value === "string" ? new Date(value) : value;
+  const d = typeof value === "string" ? parseDateOnly(value) : value;
+  if (Number.isNaN(d.getTime())) return "-";
+
   return new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
     month: "short",
@@ -33,13 +37,35 @@ export function formatDateTime(value: string | Date | null | undefined): string 
 }
 
 export function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function parseDateOnly(value: string): Date {
+  const text = String(value || "").trim();
+  const dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})/)?.[0];
+
+  if (dateOnly) {
+    const [year, month, day] = dateOnly.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return new Date(Number.NaN);
+
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
 }
 
 /** Whole days between two dates (b - a). Minimum 1 for rental day counting. */
 export function daysBetween(a: string | Date, b: string | Date): number {
-  const da = new Date(typeof a === "string" ? a : a.toISOString());
-  const db = new Date(typeof b === "string" ? b : b.toISOString());
+  const da = typeof a === "string" ? parseDateOnly(a) : a;
+  const db = typeof b === "string" ? parseDateOnly(b) : b;
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return 0;
+
   const ms = db.setHours(0, 0, 0, 0) - da.setHours(0, 0, 0, 0);
   return Math.round(ms / 86_400_000);
 }

@@ -1,5 +1,5 @@
 import type { Transaction, TransactionLine } from "@/data/types";
-import { rentalDays, daysBetween } from "./format";
+import { rentalDays, daysBetween, parseDateOnly, toISODate } from "./format";
 
 export function txDays(t: Pick<Transaction, "tanggal_mulai" | "tanggal_rencana_kembali">): number {
   return rentalDays(t.tanggal_mulai, t.tanggal_rencana_kembali);
@@ -27,14 +27,14 @@ export function txSisaTagihan(t: Transaction): number {
 /** Negative = sisa hari, positive = jumlah hari terlambat. Returns object. */
 export function returnTiming(plannedReturn: string, reference?: Date) {
   const ref = reference ?? new Date();
-  const diff = daysBetween(ref, new Date(plannedReturn)); // planned - today
+  const diff = daysBetween(ref, parseDateOnly(plannedReturn)); // planned - today
   if (diff >= 0) return { overdue: false, days: diff, label: `${diff} hari lagi` };
   return { overdue: true, days: -diff, label: `Terlambat ${-diff} hari` };
 }
 
 export function isToday(dateStr: string | null): boolean {
   if (!dateStr) return false;
-  return new Date(dateStr).toDateString() === new Date().toDateString();
+  return dateStr.slice(0, 10) === toISODate(new Date());
 }
 
 export function totalQty(line: TransactionLine): number {

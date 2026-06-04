@@ -88,16 +88,9 @@ export function ImageUploader({
           {files.map((f, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-xs"
+              className="inline-flex items-center gap-2 rounded-lg border bg-card px-2.5 py-1 text-xs"
             >
-              <a
-                href={absoluteFileUrl(f)}
-                target="_blank"
-                rel="noreferrer"
-                className="max-w-48 truncate hover:text-primary"
-              >
-                {f.split("/").pop()}
-              </a>
+              <FilePreview url={f} />
               <button
                 type="button"
                 onClick={() => updateFiles(files.filter((_, idx) => idx !== i))}
@@ -110,5 +103,33 @@ export function ImageUploader({
         </div>
       )}
     </div>
+  );
+}
+
+function FilePreview({ url }: { url: string }) {
+  const absoluteUrl = absoluteFileUrl(url);
+  const isImage = /\.(jpg|jpeg|png|webp)$/i.test(url);
+
+  if (isImage) {
+    return (
+      <a href={absoluteUrl} target="_blank" rel="noreferrer" className="block">
+        <img
+          src={absoluteUrl}
+          alt={url.split("/").pop() || "preview"}
+          className="size-14 rounded-md object-cover"
+        />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={absoluteUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="max-w-48 truncate hover:text-primary"
+    >
+      {url.split("/").pop()}
+    </a>
   );
 }

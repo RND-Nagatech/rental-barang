@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { parseDateOnly, toISODate } from "@/lib/format";
 
 interface DatePickerFieldProps {
   value?: string; // ISO yyyy-mm-dd
@@ -20,7 +21,7 @@ export function DatePickerField({
   placeholder = "Pilih tanggal",
   className,
 }: DatePickerFieldProps) {
-  const date = value ? new Date(value) : undefined;
+  const date = value ? parseDateOnly(value) : undefined;
 
   return (
     <Popover>
@@ -41,7 +42,7 @@ export function DatePickerField({
         <Calendar
           mode="single"
           selected={date}
-          onSelect={(d) => d && onChange(d.toISOString().slice(0, 10))}
+          onSelect={(d) => d && onChange(toISODate(d))}
           initialFocus
           className={cn("p-3 pointer-events-auto")}
         />

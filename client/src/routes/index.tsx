@@ -14,7 +14,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatRupiah, formatDate, formatNumber } from "@/lib/format";
+import { formatRupiah, formatDate, formatNumber, parseDateOnly, toISODate } from "@/lib/format";
 import { txTotal, returnTiming } from "@/lib/rental";
 
 export const Route = createFileRoute("/")({
@@ -31,8 +31,8 @@ function Dashboard() {
   const { items, transactions, payments, getCustomer } = useStore();
 
   const totalStok = items.reduce((s, i) => s + i.stok_total, 0);
-  const stokTersedia = items.reduce((s, i) => s + i.stok_tersedia, 0);
-  const stokDisewa = totalStok - stokTersedia;
+  const stokTersedia = items.reduce((s, i) => s + i.stok_di_gudang, 0);
+  const stokDisewa = items.reduce((s, i) => s + i.stok_sedang_keluar, 0);
   const transaksiAktif = transactions.filter((t) =>
     ["Booking", "Siap Keluar", "Sedang Disewa"].includes(t.status),
   );
@@ -43,17 +43,17 @@ function Dashboard() {
   const kembaliHariIniList = transactions.filter(
     (t) =>
       t.status === "Sedang Disewa" &&
-      new Date(t.tanggal_rencana_kembali).toDateString() === new Date().toDateString(),
+      t.tanggal_rencana_kembali.slice(0, 10) === toISODate(new Date()),
   );
 
   const now = new Date();
   const pendapatanBulanIni = payments
     .filter((p) => {
-      const d = new Date(p.tanggal);
+      const d = parseDateOnly(p.tanggal);
       return (
         d.getMonth() === now.getMonth() &&
         d.getFullYear() === now.getFullYear() &&
-        p.tipe !== "Pengembalian Deposit"
+        p.tipe !== "Refund Deposit"
       );
     })
     .reduce((s, p) => s + p.nominal, 0);

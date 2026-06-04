@@ -48,8 +48,14 @@ type ApiItem = MongoDoc & {
   deposit_default?: number;
   stok_total?: number;
   stok_tersedia?: number;
+  stok_di_gudang?: number;
+  stok_sedang_keluar?: number;
+  stok_maintenance?: number;
+  stok_hilang?: number;
   kondisi?: string;
   status_aktif?: boolean;
+  satuan?: string;
+  status?: string;
 };
 
 type ApiCustomer = MongoDoc & {
@@ -155,11 +161,32 @@ export const absoluteFileUrl = (url?: string | null) => {
 };
 
 const toId = (doc: MongoDoc) => doc.id || doc._id;
+const dateOnly = (value?: string | null) => {
+  if (!value) return "";
+  const text = String(value).trim();
+  const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/)?.[0];
+  if (isoDate) return isoDate;
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const statusBarang = (item: ApiItem): ItemStatus => {
+  const stokGudang = Number(item.stok_di_gudang ?? item.stok_tersedia ?? 0);
+
   if (item.status_aktif === false) return "Maintenance";
-  if (!item.stok_tersedia) return "Habis";
-  if (item.stok_total && item.stok_tersedia < item.stok_total) return "Sebagian Disewa";
+  if (item.status === "full_disewa" || stokGudang === 0) return "Full Disewa";
+  if (
+    item.status === "disewa_sebagian" ||
+    (item.stok_total && stokGudang < item.stok_total)
+  ) {
+    return "Disewa Sebagian";
+  }
   return "Tersedia";
 };
 
@@ -198,9 +225,11 @@ const statusApi = (status: TransactionStatus) =>
 const tipeBayar = (tipe?: string): PaymentType => {
   const map: Record<string, PaymentType> = {
     dp: "DP",
+    tambah_dp: "Tambah DP",
     pelunasan: "Pelunasan",
     denda: "Denda",
-    pengembalian_deposit: "Pengembalian Deposit",
+    pengembalian_deposit: "Refund Deposit",
+    refund_deposit: "Refund Deposit",
   };
 
   return map[tipe || ""] || "DP";
@@ -210,8 +239,8 @@ const paymentStatus = (rental: ApiRental): PaymentStatus => {
   const total = Number(rental.total_sewa || 0) + Number(rental.total_denda || 0);
   const bayar = Number(rental.total_bayar || 0);
 
-  if (bayar <= 0) return "Belum Lunas";
-  if (bayar < total) return "Sebagian";
+  if (bayar <= 0) return "Belum Bayar";
+  if (bayar < total) return "Dibayar Sebagian";
   return "Lunas";
 };
 
@@ -221,7 +250,7 @@ export const mapPayment = (payment: ApiPayment, transactions: Transaction[]): Pa
   return {
     id: toId(payment),
     transaksiId: transaction?.id || payment.kode_rental,
-    tanggal: payment.tanggal_bayar,
+    tanggal: dateOnly(payment.tanggal_bayar),
     tipe: tipeBayar(payment.tipe_bayar),
     metode:
       payment.metode_bayar === "qris"
@@ -253,12 +282,17 @@ export const mapItem = (item: ApiItem): Item => {
     id: toId(item),
     kode_barang: item.kode_barang,
     nama_barang: item.nama_barang,
+    satuan: item.satuan || "unit",
     kategoriId,
     foto: item.foto || "📦",
     harga_sewa_per_hari: Number(item.harga_sewa_per_hari || 0),
     denda_per_hari: Number(item.denda_per_hari || 0),
     stok_total: Number(item.stok_total || 0),
-    stok_tersedia: Number(item.stok_tersedia || 0),
+    stok_tersedia: Number(item.stok_tersedia ?? item.stok_di_gudang ?? 0),
+    stok_di_gudang: Number(item.stok_di_gudang ?? item.stok_tersedia ?? 0),
+    stok_sedang_keluar: Number(item.stok_sedang_keluar || 0),
+    stok_maintenance: Number(item.stok_maintenance || 0),
+    stok_hilang: Number(item.stok_hilang || 0),
     deposit_default: Number(item.deposit_default || 0),
     status: statusBarang(item),
     kondisi: kondisiBarang(item.kondisi),
@@ -284,10 +318,10 @@ export const mapRental = (rental: ApiRental, customers: Customer[], items: Item[
     id: toId(rental),
     kode: rental.kode_rental,
     customerId: customer?.id || rental.kode_customer,
-    tanggal_mulai: rental.tanggal_mulai,
-    tanggal_rencana_kembali: rental.tanggal_rencana_kembali,
-    tanggal_keluar: rental.tanggal_keluar || null,
-    tanggal_kembali: rental.tanggal_kembali || null,
+    tanggal_mulai: dateOnly(rental.tanggal_mulai),
+    tanggal_rencana_kembali: dateOnly(rental.tanggal_rencana_kembali),
+    tanggal_keluar: dateOnly(rental.tanggal_keluar) || dateOnly(rental.tanggal_mulai) || null,
+    tanggal_kembali: dateOnly(rental.tanggal_kembali) || null,
     items: detail.map((line) => {
       const item = items.find((barang) => barang.kode_barang === line.kode_barang);
 
@@ -361,6 +395,7 @@ export const barangApi = {
           body: JSON.stringify({
             kode_barang: item.kode_barang,
             nama_barang: item.nama_barang,
+            satuan: item.satuan,
             id_kategori: item.kategoriId,
             foto: item.foto,
             harga_sewa_per_hari: item.harga_sewa_per_hari,
@@ -368,6 +403,10 @@ export const barangApi = {
             deposit_default: item.deposit_default,
             stok_total: item.stok_total,
             stok_tersedia: item.stok_tersedia,
+            stok_di_gudang: item.stok_di_gudang,
+            stok_sedang_keluar: item.stok_sedang_keluar,
+            stok_maintenance: item.stok_maintenance,
+            stok_hilang: item.stok_hilang,
             kondisi: kondisiApi(item.kondisi),
             status_aktif: item.status !== "Maintenance",
           }),
@@ -382,6 +421,7 @@ export const barangApi = {
           body: JSON.stringify({
             kode_barang: item.kode_barang,
             nama_barang: item.nama_barang,
+            satuan: item.satuan,
             id_kategori: item.kategoriId,
             foto: item.foto,
             harga_sewa_per_hari: item.harga_sewa_per_hari,
@@ -389,6 +429,10 @@ export const barangApi = {
             deposit_default: item.deposit_default,
             stok_total: item.stok_total,
             stok_tersedia: item.stok_tersedia,
+            stok_di_gudang: item.stok_di_gudang,
+            stok_sedang_keluar: item.stok_sedang_keluar,
+            stok_maintenance: item.stok_maintenance,
+            stok_hilang: item.stok_hilang,
             kondisi: kondisiApi(item.kondisi),
             status_aktif: item.status !== "Maintenance",
           }),
@@ -451,7 +495,10 @@ export const rentalApi = {
           tanggal_rencana_kembali: transaction.tanggal_rencana_kembali,
           diskon: transaction.diskon,
           deposit: transaction.deposit,
-          total_bayar: transaction.terbayar,
+          total_bayar: transaction.nominal_bayar ?? transaction.terbayar,
+          nominal_bayar: transaction.nominal_bayar ?? transaction.terbayar,
+          metode_pembayaran: transaction.metode_pembayaran,
+          bukti_pembayaran: transaction.bukti_pembayaran,
           catatan: transaction.catatan,
           detail: transaction.items.map((line) => {
             const item = items.find((barang) => barang.id === line.itemId);
@@ -531,14 +578,15 @@ export const pembayaranApi = {
   listRaw: async () => (await request<ApiList<ApiPayment>>("/pembayaran")).data,
   create: async (payment: Omit<Payment, "id">, transactions: Transaction[]) => {
     const transaction = transactions.find((item) => item.id === payment.transaksiId);
+    const kodeRental = transaction?.kode || payment.kodeRental || payment.transaksiId;
 
-    if (!transaction) throw new Error("Transaksi tidak ditemukan");
+    if (!kodeRental) throw new Error("Kode rental wajib diisi");
 
     return (
       await request<ApiSingle<ApiPayment>>("/pembayaran", {
         method: "POST",
         body: JSON.stringify({
-          kode_rental: transaction.kode,
+          kode_rental: kodeRental,
           tanggal_bayar: payment.tanggal,
           tipe_bayar: payment.tipe,
           metode_bayar: payment.metode,
