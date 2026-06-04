@@ -4,6 +4,7 @@ const Barang = require("../models/barangModel");
 const Customer = require("../models/customerModel");
 const Pembayaran = require("../models/pembayaranModel");
 const Pengaturan = require("../models/pengaturanModel");
+const { kirimWhatsApp } = require("../utils/whatsappNotifier");
 const asyncHandler = require("../utils/asyncHandler");
 const buatKodeRental = require("../utils/kodeRental");
 const buatKodePembayaran = require("../utils/kodePembayaran");
@@ -80,6 +81,22 @@ const ambilDefaultJaminan = async () => {
     ),
     jenis_dokumen_default: normalisasiJenisDokumen(pengaturan.jenis_dokumen_default || "ktp"),
   };
+};
+
+const kirimNotifBookingWhatsApp = async ({ pengaturan, customer, rental }) => {
+  if (!pengaturan?.wa_enabled || !pengaturan?.wa_notif_booking_success) return;
+
+  const noHp = String(customer?.no_hp || "").trim();
+  if (!noHp) return;
+
+  await kirimWhatsApp({
+    pengaturan,
+    to: noHp,
+    message: `Booking berhasil: ${rental.kode_rental}. Periode sewa ${rental.tanggal_mulai} s/d ${rental.tanggal_rencana_kembali}. Total sewa Rp ${Number(rental.total_sewa || 0).toLocaleString("id-ID")}.`,
+  });
+
+  rental.wa_last_booking_sent_at = hariIni();
+  await rental.save();
 };
 
 const tentukanStatusJaminanSaatKembali = ({
@@ -461,6 +478,19 @@ const tambahRental = asyncHandler(async (req, res) => {
   }
 
   await recalculateStokBarang(detail.map((item) => item.kode_barang));
+
+  const pengaturan = await Pengaturan.findOne();
+  if (pengaturan) {
+    try {
+      await kirimNotifBookingWhatsApp({
+        pengaturan,
+        customer,
+        rental,
+      });
+    } catch (error) {
+      console.error(`Gagal kirim WA booking ${rental.kode_rental}: ${error.message}`);
+    }
+  }
 
   await kirimRental(res, rental, 201, "Rental berhasil dibuat");
 });

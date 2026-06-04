@@ -123,6 +123,18 @@ const rentalSchema = new mongoose.Schema(
       enum: ["belum_diterima", "diterima", "dikembalikan", "dipotong", "ditahan"],
       default: "belum_diterima",
     },
+    wa_last_booking_sent_at: {
+      type: String,
+      default: null,
+    },
+    wa_last_payment_reminder_at: {
+      type: String,
+      default: null,
+    },
+    wa_last_return_reminder_at: {
+      type: String,
+      default: null,
+    },
     total_sewa: {
       type: Number,
       min: [0, "Total sewa tidak boleh kurang dari 0"],

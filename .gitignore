@@ -23,3 +23,8 @@ pnpm-debug.log*
 # Environment files
 **/.env.local
 **/.env.*.local
+
+# WhatsApp Web runtime artifacts
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+**/.wwebjs_temp/

@@ -147,6 +147,15 @@ export type Pengaturan = {
   jenis_jaminan_default: string;
   nominal_deposit_default: number;
   jenis_dokumen_default: string;
+  wa_enabled: boolean;
+  wa_connection_mode: "provider_api" | "web_qr";
+  wa_provider_url: string;
+  wa_api_key: string;
+  wa_sender: string;
+  wa_test_phone: string;
+  wa_notif_booking_success: boolean;
+  wa_reminder_pembayaran_hari_h: boolean;
+  wa_reminder_pengembalian_hari_h: boolean;
   notifikasi_pengembalian: boolean;
   tandai_overdue_otomatis: boolean;
 };
@@ -755,6 +764,36 @@ export const pengaturanApi = {
         body: JSON.stringify(pengaturan),
       })
     ).data,
+  waTest: async (no_hp: string, pesan?: string) =>
+    request<ApiSingle<{ sukses: boolean }>>("/pengaturan/wa/test", {
+      method: "POST",
+      body: JSON.stringify({ no_hp, pesan }),
+    }),
+  waProcessReminders: async () =>
+    request<ApiSingle<{ booking: number; pembayaran: number; pengembalian: number }>>(
+      "/pengaturan/wa/process-reminders",
+      {
+        method: "POST",
+      },
+    ),
+  waWebStart: async () =>
+    request<ApiSingle<{ status: string; qrDataUrl?: string; lastError?: string }>>(
+      "/pengaturan/wa/web/start",
+      {
+        method: "POST",
+      },
+    ),
+  waWebStatus: async () =>
+    request<ApiSingle<{ status: string; qrDataUrl?: string; lastError?: string }>>(
+      "/pengaturan/wa/web/status",
+    ),
+  waWebDisconnect: async () =>
+    request<ApiSingle<{ status: string; qrDataUrl?: string; lastError?: string }>>(
+      "/pengaturan/wa/web/disconnect",
+      {
+        method: "POST",
+      },
+    ),
 };
 
 const mapList = <T, R>(list: T[], mapper: (item: T) => R): R[] => list.map(mapper);

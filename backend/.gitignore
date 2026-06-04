@@ -3,3 +3,8 @@ node_modules
 npm-debug.log
 uploads/*
 !uploads/.gitkeep
+
+# WhatsApp Web session/cache
+.wwebjs_auth/
+.wwebjs_cache/
+.wwebjs_temp/

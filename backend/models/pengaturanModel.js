@@ -44,6 +44,47 @@ const pengaturanSchema = new mongoose.Schema(
       enum: ["ktp", "sim", "paspor", "kartu_mahasiswa", "lainnya"],
       default: "ktp",
     },
+    wa_enabled: {
+      type: Boolean,
+      default: false,
+    },
+    wa_connection_mode: {
+      type: String,
+      enum: ["provider_api", "web_qr"],
+      default: "provider_api",
+    },
+    wa_provider_url: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    wa_api_key: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    wa_sender: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    wa_test_phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    wa_notif_booking_success: {
+      type: Boolean,
+      default: true,
+    },
+    wa_reminder_pembayaran_hari_h: {
+      type: Boolean,
+      default: true,
+    },
+    wa_reminder_pengembalian_hari_h: {
+      type: Boolean,
+      default: true,
+    },
     notifikasi_pengembalian: {
       type: Boolean,
       default: true,
