@@ -3,13 +3,21 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, Eye, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
-import type { ChargeType, RentalCharge, Transaction, ItemCondition } from "@/data/types";
+import type {
+  ChargeType,
+  Payment,
+  PaymentMethod,
+  PaymentType,
+  RentalCharge,
+  Transaction,
+  ItemCondition,
+} from "@/data/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { ImageUploader } from "@/components/common/ImageUploader";
 import { DataTable, type Column } from "@/components/common/DataTable";
-import { absoluteFileUrl } from "@/lib/api";
+import { absoluteFileUrl, pengaturanApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,11 +56,24 @@ const CHARGE_TYPES: ChargeType[] = [
 
 function Page() {
   const { tx } = Route.useSearch();
-  const { transactions, getCustomer, getItem, updateTransaction } = useStore();
+  const { transactions, payments, getCustomer, getItem, updateTransaction, addPayment } = useStore();
   const [selectedId, setSelectedId] = React.useState(tx || "");
   const [filterStatus, setFilterStatus] = React.useState("all");
+  const [defaultDendaPerHari, setDefaultDendaPerHari] = React.useState(0);
   const list = transactions.filter((t) => t.status === "Sedang Disewa");
   const selected = list.find((t) => t.id === selectedId) || null;
+
+  React.useEffect(() => {
+    pengaturanApi
+      .get()
+      .then((data) =>
+        setDefaultDendaPerHari(
+          Number(data.default_denda_per_hari ?? data.denda_keterlambatan_default ?? 0),
+        ),
+      )
+      .catch(() => setDefaultDendaPerHari(0));
+  }, []);
+
   const rows = list
     .map((t) => ({
       ...t,
@@ -117,9 +138,11 @@ function Page() {
           key={selected.id}
           t={selected}
           customer={getCustomer(selected.customerId)?.nama ?? "-"}
-          getDenda={(id) => getItem(id)?.denda_per_hari ?? 0}
+          dendaPerHari={defaultDendaPerHari}
+          payments={payments.filter((payment) => payment.transaksiId === selected.id)}
           satuan={(id) => getItem(id)?.satuan || "unit"}
           onDone={updateTransaction}
+          onPayment={addPayment}
         />
       </div>
     );
@@ -159,20 +182,24 @@ function Page() {
 function KembaliForm({
   t,
   customer,
-  getDenda,
+  dendaPerHari,
+  payments,
   satuan,
   onDone,
+  onPayment,
 }: {
   t: Transaction;
   customer: string;
-  getDenda: (id: string) => number;
+  dendaPerHari: number;
+  payments: Payment[];
   satuan: (id: string) => string;
-  onDone: (t: Transaction) => void;
+  onDone: (t: Transaction) => void | Promise<void>;
+  onPayment: (p: Omit<Payment, "id">) => void | Promise<void>;
 }) {
   const navigate = useNavigate();
   const timing = returnTiming(t.tanggal_rencana_kembali);
   const lateDays = timing.overdue ? timing.days : 0;
-  const dendaTerlambat = t.items.reduce((s, l) => s + getDenda(l.itemId) * l.qty, 0) * lateDays;
+  const dendaTerlambat = lateDays * Number(dendaPerHari || 0);
   const butuhDeposit = ["Deposit Uang", "Deposit + Dokumen"].includes(t.jenis_jaminan);
   const butuhDokumen = ["Dokumen", "Deposit + Dokumen"].includes(t.jenis_jaminan);
 
@@ -199,9 +226,25 @@ function KembaliForm({
   const [statusDokumen, setStatusDokumen] = React.useState<"Dikembalikan" | "Ditahan">(
     "Dikembalikan",
   );
+  const [paymentForm, setPaymentForm] = React.useState({
+    tipe: "Pelunasan" as PaymentType,
+    metode: "Transfer" as PaymentMethod,
+    nominal: Math.max(0, txTotal(t) - t.terbayar),
+    bukti: "",
+    catatan: "Pelunasan sebelum serah terima kembali",
+  });
 
   const totalCharge = charges.reduce((sum, charge) => sum + Number(charge.nominal || 0), 0);
   const total = txTotal(t);
+  const terbayarSetelahPelunasan = t.terbayar + paymentForm.nominal;
+  const sisaRentalSetelahBayar = Math.max(0, total - terbayarSetelahPelunasan);
+  const lebihBayarRental = Math.max(0, terbayarSetelahPelunasan - total);
+  const statusPembayaranSetelah =
+    terbayarSetelahPelunasan <= 0
+      ? "Belum Bayar"
+      : terbayarSetelahPelunasan < total
+        ? "Dibayar Sebagian"
+        : "Lunas";
   const depositDiterima = Number(t.deposit_received || 0);
   const chargePotongJaminan = charges
     .filter((charge) => charge.potong_dari_jaminan)
@@ -213,7 +256,7 @@ function KembaliForm({
       .filter((charge) => !charge.potong_dari_jaminan)
       .reduce((sum, charge) => sum + Number(charge.nominal || 0), 0) + chargePotongTidakTertutup;
   const depositRefund = Math.max(0, depositDiterima - totalPotongan);
-  const sisaSewa = Math.max(0, total - t.terbayar);
+  const sisaSewa = sisaRentalSetelahBayar;
   const sisaTagihan = sisaSewa + chargeBelumDibayar;
   const statusDeposit =
     depositDiterima <= 0 ? "Belum Diterima" : depositRefund > 0 ? "Dikembalikan" : "Dipotong";
@@ -227,28 +270,67 @@ function KembaliForm({
       ? statusDeposit
       : "Belum Diterima";
 
-  function finish() {
-    onDone({
-      ...t,
-      items: lines,
-      tanggal_kembali: toISODate(new Date()),
-      status: "Selesai",
-      status_jaminan: statusJaminanFinal,
-      deposit_status: statusDeposit,
-      dendaKeterlambatan: charges
-        .filter((charge) => charge.jenis_charge === "Keterlambatan")
-        .reduce((sum, charge) => sum + charge.nominal, 0),
-      dendaKerusakan: charges
-        .filter((charge) => charge.jenis_charge === "Kerusakan")
-        .reduce((sum, charge) => sum + charge.nominal, 0),
-      dendaKehilangan: charges
-        .filter((charge) => charge.jenis_charge === "Kehilangan")
-        .reduce((sum, charge) => sum + charge.nominal, 0),
-      charges,
-      paymentStatus: sisaTagihan > 0 ? "Dibayar Sebagian" : "Lunas",
+  React.useEffect(() => {
+    if (t.charges?.length || dendaTerlambat <= 0) return;
+    setCharges((prev) => {
+      if (prev.some((charge) => charge.jenis_charge === "Keterlambatan")) return prev;
+      return [
+        {
+          jenis_charge: "Keterlambatan",
+          nominal: dendaTerlambat,
+          catatan: `${lateDays} hari terlambat`,
+          potong_dari_jaminan: Number(t.deposit_received || 0) > 0,
+        },
+        ...prev,
+      ];
     });
-    toast.success(`${t.kode} → Selesai.`);
-    navigate({ to: "/transaksi" });
+  }, [dendaTerlambat, lateDays, t.charges?.length, t.deposit_received]);
+
+  async function finish() {
+    if (sisaRentalSetelahBayar > 0) {
+      toast.error("Rental belum lunas. Input pelunasan terlebih dahulu.");
+      return;
+    }
+
+    try {
+      if (paymentForm.nominal > 0) {
+        await onPayment({
+          transaksiId: t.id,
+          kodeRental: t.kode,
+          tanggal: toISODate(new Date()),
+          tipe: paymentForm.tipe,
+          metode: paymentForm.metode,
+          nominal: paymentForm.nominal,
+          bukti: paymentForm.bukti || "-",
+          catatan: paymentForm.catatan,
+        });
+      }
+
+      await onDone({
+        ...t,
+        items: lines,
+        terbayar: terbayarSetelahPelunasan,
+        tanggal_kembali: toISODate(new Date()),
+        status: "Selesai",
+        status_jaminan: statusJaminanFinal,
+        deposit_status: statusDeposit,
+        dendaKeterlambatan: charges
+          .filter((charge) => charge.jenis_charge === "Keterlambatan")
+          .reduce((sum, charge) => sum + charge.nominal, 0),
+        dendaKerusakan: charges
+          .filter((charge) => charge.jenis_charge === "Kerusakan")
+          .reduce((sum, charge) => sum + charge.nominal, 0),
+        dendaKehilangan: charges
+          .filter((charge) => charge.jenis_charge === "Kehilangan")
+          .reduce((sum, charge) => sum + charge.nominal, 0),
+        charges,
+        paymentStatus: sisaTagihan > 0 ? "Dibayar Sebagian" : "Lunas",
+      });
+      toast.success(`${t.kode} → Selesai.`);
+      navigate({ to: "/transaksi" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Gagal menyelesaikan transaksi.");
+    }
   }
 
   return (
@@ -491,7 +573,7 @@ function KembaliForm({
 
         <div className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
           <p className="font-semibold">Data Jaminan Diterima</p>
-          <Row label="Jenis Jaminan" value={t.jenis_jaminan} />
+          <Row label="Jenis Jaminan" value={t.status_jaminan === "Diterima" ? t.jenis_jaminan : "Belum Diterima"} />
           {butuhDeposit && <Row label="Deposit Diterima" value={formatRupiah(depositDiterima)} />}
           {butuhDokumen && (
             <>
@@ -514,6 +596,111 @@ function KembaliForm({
               </div>
             </>
           )}
+        </div>
+
+        <div className="space-y-3 rounded-xl border bg-card p-4">
+          <div>
+            <p className="text-sm font-semibold">Pelunasan Rental</p>
+            <p className="text-xs text-muted-foreground">
+              Rental harus lunas sebelum serah terima kembali disimpan.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Jenis Pembayaran</Label>
+              <Select
+                value={paymentForm.tipe}
+                onValueChange={(value) =>
+                  setPaymentForm({ ...paymentForm, tipe: value as PaymentType })
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["DP", "Tambah DP", "Pelunasan", "Denda", "Charge", "Refund Jaminan"].map(
+                    (tipe) => (
+                      <SelectItem key={tipe} value={tipe}>
+                        {tipe}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Metode</Label>
+              <Select
+                value={paymentForm.metode}
+                onValueChange={(value) =>
+                  setPaymentForm({ ...paymentForm, metode: value as PaymentMethod })
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Tunai", "Transfer", "QRIS", "Kartu"].map((metode) => (
+                    <SelectItem key={metode} value={metode}>
+                      {metode}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nominal Bayar Sekarang</Label>
+              <CurrencyInput
+                value={paymentForm.nominal}
+                onChange={(nominal) => setPaymentForm({ ...paymentForm, nominal })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Catatan</Label>
+              <Input
+                className="h-9"
+                value={paymentForm.catatan}
+                onChange={(event) => setPaymentForm({ ...paymentForm, catatan: event.target.value })}
+              />
+            </div>
+          </div>
+          <ImageUploader
+            label="Upload bukti pembayaran"
+            value={paymentForm.bukti}
+            onChange={(value) => setPaymentForm({ ...paymentForm, bukti: String(value) })}
+          />
+          <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
+            <Row label="Total Tagihan" value={formatRupiah(total)} />
+            <Row label="Total Sudah Dibayar" value={formatRupiah(t.terbayar)} />
+            <Row label="Nominal Bayar Sekarang" value={formatRupiah(paymentForm.nominal)} />
+            <Row label="Status Setelah Pembayaran" value={statusPembayaranSetelah} />
+            <div className="my-1 border-t" />
+            <Row
+              label={lebihBayarRental > 0 ? "Lebih Bayar" : "Sisa Setelah Pembayaran"}
+              value={formatRupiah(lebihBayarRental > 0 ? lebihBayarRental : sisaRentalSetelahBayar)}
+              bold
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Riwayat Pembayaran</Label>
+            {payments.length === 0 ? (
+              <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+                Belum ada riwayat pembayaran.
+              </p>
+            ) : (
+              <div className="overflow-hidden rounded-lg border text-sm">
+                {payments.map((payment) => (
+                  <div key={payment.id} className="grid grid-cols-5 gap-2 border-b p-2 last:border-b-0">
+                    <span>{formatDate(payment.tanggal)}</span>
+                    <span>{payment.tipe}</span>
+                    <span>{payment.metode}</span>
+                    <span className="text-right font-medium">{formatRupiah(payment.nominal)}</span>
+                    <span className="text-right text-muted-foreground">Tercatat</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">

@@ -152,6 +152,7 @@ export type Pengaturan = {
   nama_usaha: string;
   telepon: string;
   alamat: string;
+  default_denda_per_hari?: number;
   denda_keterlambatan_default: number;
   deposit_minimum_default: number;
   jenis_jaminan_default: string;
@@ -262,7 +263,9 @@ const tipeBayar = (tipe?: string): PaymentType => {
     tambah_dp: "Tambah DP",
     pelunasan: "Pelunasan",
     denda: "Denda",
-    refund_deposit: "Refund Deposit",
+    charge: "Charge",
+    refund_deposit: "Refund Jaminan",
+    refund_jaminan: "Refund Jaminan",
   };
 
   return map[tipe || ""] || "DP";
@@ -311,18 +314,19 @@ const jenisJaminan = (jenis?: string): Transaction["jenis_jaminan"] => {
     tanpa_jaminan: "Tanpa Jaminan",
   };
 
-  return map[jenis || ""] || "Deposit Uang";
+  return map[jenis || ""] || "Belum Diisi";
 };
 
 const jenisJaminanApi = (jenis: Transaction["jenis_jaminan"]) => {
   const map: Record<Transaction["jenis_jaminan"], string> = {
+    "Belum Diisi": "",
     "Deposit Uang": "deposit_uang",
     Dokumen: "dokumen",
     "Deposit + Dokumen": "deposit_dokumen",
     "Tanpa Jaminan": "tanpa_jaminan",
   };
 
-  return map[jenis] || "deposit_uang";
+  return map[jenis] || "";
 };
 
 const jenisDokumen = (jenis?: string): Transaction["jenis_dokumen"] => {
@@ -563,8 +567,6 @@ export const barangApi = {
             id_kategori: item.kategoriId,
             foto: item.foto,
             harga_sewa_per_hari: item.harga_sewa_per_hari,
-            denda_per_hari: item.denda_per_hari,
-            deposit_default: item.deposit_default,
             stok_total: item.stok_total,
             stok_tersedia: item.stok_tersedia,
             stok_di_gudang: item.stok_di_gudang,
@@ -589,8 +591,6 @@ export const barangApi = {
             id_kategori: item.kategoriId,
             foto: item.foto,
             harga_sewa_per_hari: item.harga_sewa_per_hari,
-            denda_per_hari: item.denda_per_hari,
-            deposit_default: item.deposit_default,
             stok_total: item.stok_total,
             stok_tersedia: item.stok_tersedia,
             stok_di_gudang: item.stok_di_gudang,
@@ -658,10 +658,6 @@ export const rentalApi = {
           tanggal_mulai: transaction.tanggal_mulai,
           tanggal_rencana_kembali: transaction.tanggal_rencana_kembali,
           diskon: transaction.diskon,
-          jenis_jaminan: jenisJaminanApi(transaction.jenis_jaminan),
-          nominal_jaminan: transaction.nominal_jaminan,
-          jenis_dokumen: jenisDokumenApi(transaction.jenis_dokumen),
-          deposit_required: transaction.deposit_required,
           total_bayar: transaction.nominal_bayar ?? transaction.terbayar,
           nominal_bayar: transaction.nominal_bayar ?? transaction.terbayar,
           metode_pembayaran: transaction.metode_pembayaran,
@@ -691,6 +687,19 @@ export const rentalApi = {
   },
   update: async (transaction: Transaction, customers: Customer[], items: Item[]) => {
     const customer = customers.find((item) => item.id === transaction.customerId);
+    const totalChargePotongJaminan = (transaction.charges || [])
+      .filter((charge) => charge.potong_dari_jaminan)
+      .reduce((sum, charge) => sum + Number(charge.nominal || 0), 0);
+    const potonganJaminan = Math.min(
+      Number(transaction.deposit_received || 0),
+      totalChargePotongJaminan,
+    );
+    const chargeTidakTertutupJaminan = Math.max(0, totalChargePotongJaminan - potonganJaminan);
+    const totalChargeBelumDibayar =
+      (transaction.charges || [])
+        .filter((charge) => !charge.potong_dari_jaminan)
+        .reduce((sum, charge) => sum + Number(charge.nominal || 0), 0) +
+      chargeTidakTertutupJaminan;
 
     return (
       await request<ApiSingle<ApiRental>>(`/rental/${transaction.id}`, {
@@ -716,9 +725,7 @@ export const rentalApi = {
           total_bayar: transaction.terbayar,
           total_denda:
             transaction.charges?.length
-              ? transaction.charges
-                  .filter((charge) => !charge.potong_dari_jaminan)
-                  .reduce((sum, charge) => sum + charge.nominal, 0)
+              ? totalChargeBelumDibayar
               : transaction.dendaKeterlambatan +
                 transaction.dendaKerusakan +
                 transaction.dendaKehilangan,

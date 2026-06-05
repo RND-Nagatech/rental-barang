@@ -13,7 +13,13 @@ export type TransactionStatus =
 
 export type PaymentStatus = "Belum Bayar" | "Dibayar Sebagian" | "Lunas";
 
-export type PaymentType = "DP" | "Tambah DP" | "Pelunasan" | "Denda" | "Refund Deposit";
+export type PaymentType =
+  | "DP"
+  | "Tambah DP"
+  | "Pelunasan"
+  | "Denda"
+  | "Charge"
+  | "Refund Jaminan";
 export type ChargeType = "Keterlambatan" | "Kerusakan" | "Kehilangan" | "Laundry/Cleaning" | "Lainnya";
 
 export type DepositStatus =
@@ -23,6 +29,7 @@ export type DepositStatus =
   | "Dipotong";
 
 export type GuaranteeType =
+  | "Belum Diisi"
   | "Deposit Uang"
   | "Dokumen"
   | "Deposit + Dokumen"

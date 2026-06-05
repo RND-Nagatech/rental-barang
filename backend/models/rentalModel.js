@@ -97,7 +97,7 @@ const rentalSchema = new mongoose.Schema(
     jenis_jaminan: {
       type: String,
       enum: ["deposit_uang", "dokumen", "deposit_dokumen", "tanpa_jaminan"],
-      default: "deposit_uang",
+      default: null,
     },
     nominal_jaminan: {
       type: Number,

@@ -11,7 +11,7 @@ import { ModalForm } from "@/components/common/ModalForm";
 import { DetailDrawer } from "@/components/common/DetailDrawer";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { ImageUploader } from "@/components/common/ImageUploader";
-import { absoluteFileUrl, pengaturanApi } from "@/lib/api";
+import { absoluteFileUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,20 +60,12 @@ const emptyForm = (kategoriId: string): Omit<Item, "id" | "riwayat"> => ({
 
 function BarangPage() {
   const { items, categories, getCategory, addItem, updateItem } = useStore();
-  const [defaultDenda, setDefaultDenda] = React.useState(0);
   const [catFilter, setCatFilter] = React.useState("all");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Item | null>(null);
   const [form, setForm] = React.useState(emptyForm(categories[0]?.id ?? ""));
   const [detail, setDetail] = React.useState<Item | null>(null);
-
-  React.useEffect(() => {
-    pengaturanApi
-      .get()
-      .then((data) => setDefaultDenda(data.denda_keterlambatan_default))
-      .catch(() => setDefaultDenda(0));
-  }, []);
 
   const filtered = items.filter(
     (i) =>
@@ -83,10 +75,7 @@ function BarangPage() {
 
   function openAdd() {
     setEditing(null);
-    setForm({
-      ...emptyForm(categories[0]?.id ?? ""),
-      denda_per_hari: defaultDenda,
-    });
+    setForm(emptyForm(categories[0]?.id ?? ""));
     setFormOpen(true);
   }
 
@@ -145,7 +134,6 @@ function BarangPage() {
         </span>
       ),
     },
-    { key: "deposit", header: "Deposit", render: (i) => formatRupiah(i.deposit_default) },
     { key: "status", header: "Status", render: (i) => <StatusBadge status={i.status} /> },
     {
       key: "aksi",
@@ -290,12 +278,6 @@ function BarangPage() {
               onChange={(v) => setForm({ ...form, harga_sewa_per_hari: v })}
             />
           </Field>
-          <Field label="Denda / Hari">
-            <CurrencyInput
-              value={form.denda_per_hari}
-              onChange={(v) => setForm({ ...form, denda_per_hari: v })}
-            />
-          </Field>
           <Field label="Stok Total">
             <Input
               type="number"
@@ -336,12 +318,6 @@ function BarangPage() {
               type="number"
               value={form.stok_hilang}
               onChange={(e) => setForm({ ...form, stok_hilang: +e.target.value })}
-            />
-          </Field>
-          <Field label="Deposit Default">
-            <CurrencyInput
-              value={form.deposit_default}
-              onChange={(v) => setForm({ ...form, deposit_default: v })}
             />
           </Field>
           <Field label="Kondisi">
@@ -391,8 +367,6 @@ function BarangPage() {
               <Info label="Kategori" value={getCategory(detail.kategoriId)?.nama ?? "-"} />
               <Info label="Satuan" value={detail.satuan} />
               <Info label="Sewa / Hari" value={formatRupiah(detail.harga_sewa_per_hari)} />
-              <Info label="Denda / Hari" value={formatRupiah(detail.denda_per_hari)} />
-              <Info label="Deposit" value={formatRupiah(detail.deposit_default)} />
               <Info label="Stok Total" value={formatNumber(detail.stok_total)} />
               <Info label="Stok Gudang" value={formatNumber(detail.stok_di_gudang)} />
               <Info label="Sedang Keluar" value={formatNumber(detail.stok_sedang_keluar)} />

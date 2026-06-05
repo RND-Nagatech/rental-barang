@@ -14,10 +14,12 @@ const normalisasiTipeBayar = (tipe) =>
   String(tipe || "dp")
     .trim()
     .toLowerCase()
+    .replace(/refund deposit/g, "refund_jaminan")
+    .replace(/refund jaminan/g, "refund_jaminan")
     .replace(/tambah dp/g, "tambah_dp")
     .replace(/\s+/g, "_");
 
-const TIPE_BAYAR_RENTAL = ["dp", "tambah_dp", "pelunasan"];
+const TIPE_REFUND = "refund_jaminan";
 
 const normalisasiMetodeBayar = (metode) =>
   String(metode || "tunai")
@@ -64,11 +66,6 @@ const tambahPembayaran = asyncHandler(async (req, res) => {
 
   const tipeBayar = normalisasiTipeBayar(req.body.tipe_bayar || req.body.tipe);
 
-  if (!TIPE_BAYAR_RENTAL.includes(tipeBayar)) {
-    res.status(400);
-    throw new Error("Tipe pembayaran rental hanya boleh DP, Tambah DP, atau Pelunasan");
-  }
-
   const pembayaran = await Pembayaran.create({
     kode_pembayaran:
       req.body.kode_pembayaran ||
@@ -83,12 +80,16 @@ const tambahPembayaran = asyncHandler(async (req, res) => {
     catatan: req.body.catatan || null,
   });
 
-  rental.total_bayar = Number(rental.total_bayar || 0) + jumlahBayar;
-  rental.sisa_tagihan = Math.max(
-    0,
-    Number(rental.total_sewa || 0) + Number(rental.total_denda || 0) - Number(rental.total_bayar || 0)
-  );
-  await rental.save();
+  if (tipeBayar !== TIPE_REFUND) {
+    rental.total_bayar = Number(rental.total_bayar || 0) + jumlahBayar;
+    rental.sisa_tagihan = Math.max(
+      0,
+      Number(rental.total_sewa || 0) +
+        Number(rental.total_denda || 0) -
+        Number(rental.total_bayar || 0)
+    );
+    await rental.save();
+  }
 
   res.status(201).json({
     sukses: true,

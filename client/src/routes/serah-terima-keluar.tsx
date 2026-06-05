@@ -3,12 +3,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowLeft, ArrowUpFromLine, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
-import type { Transaction, ItemCondition, PaymentMethod, GuaranteeStatus } from "@/data/types";
+import type {
+  DocumentType,
+  GuaranteeType,
+  Transaction,
+  ItemCondition,
+  PaymentMethod,
+  GuaranteeStatus,
+} from "@/data/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { ImageUploader } from "@/components/common/ImageUploader";
 import { DataTable, type Column } from "@/components/common/DataTable";
+import { pengaturanApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,11 +36,27 @@ export const Route = createFileRoute("/serah-terima-keluar")({
 });
 
 const CONDITIONS: ItemCondition[] = ["Baik", "Lecet Ringan", "Rusak Ringan"];
+const mapJaminan: Record<string, GuaranteeType> = {
+  deposit_uang: "Deposit Uang",
+  dokumen: "Dokumen",
+  deposit_dokumen: "Deposit + Dokumen",
+  tanpa_jaminan: "Tanpa Jaminan",
+};
+const mapDokumen: Record<string, DocumentType> = {
+  ktp: "KTP",
+  sim: "SIM",
+  paspor: "Paspor",
+  kartu_mahasiswa: "Kartu Mahasiswa",
+  lainnya: "Lainnya",
+};
 
 function Page() {
   const { transactions, getCustomer, getItem, updateTransaction } = useStore();
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [filterJaminan, setFilterJaminan] = React.useState("all");
+  const [defaultJaminan, setDefaultJaminan] = React.useState<GuaranteeType>("Deposit Uang");
+  const [defaultDokumen, setDefaultDokumen] = React.useState<DocumentType>("KTP");
+  const [defaultNominalJaminan, setDefaultNominalJaminan] = React.useState(0);
   const list = transactions.filter((t) => t.status === "Siap Keluar");
   const selected = list.find((t) => t.id === selectedId) || null;
   const rows = list
@@ -53,7 +77,12 @@ function Page() {
     },
     { key: "barang", header: "Barang", className: "max-w-xs truncate" },
     { key: "qtyTotal", header: "Qty" },
-    { key: "jaminan", header: "Jaminan", render: (row) => row.jenis_jaminan },
+    {
+      key: "jaminan",
+      header: "Jaminan",
+      render: (row) =>
+        row.status_jaminan === "Diterima" ? row.jenis_jaminan : "Belum Diterima",
+    },
     { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status} /> },
     {
       key: "aksi",
@@ -74,6 +103,19 @@ function Page() {
     },
   ];
 
+  React.useEffect(() => {
+    pengaturanApi
+      .get()
+      .then((data) => {
+        setDefaultJaminan(mapJaminan[data.jenis_jaminan_default] || "Deposit Uang");
+        setDefaultDokumen(mapDokumen[data.jenis_dokumen_default] || "KTP");
+        setDefaultNominalJaminan(
+          Number(data.nominal_deposit_default ?? data.deposit_minimum_default ?? 0),
+        );
+      })
+      .catch(() => undefined);
+  }, []);
+
   if (selected) {
     return (
       <div className="space-y-6">
@@ -91,6 +133,9 @@ function Page() {
           t={selected}
           customer={getCustomer(selected.customerId)?.nama ?? "-"}
           satuan={(id) => getItem(id)?.satuan || "unit"}
+          defaultJaminan={defaultJaminan}
+          defaultDokumen={defaultDokumen}
+          defaultNominalJaminan={defaultNominalJaminan}
           onSubmit={updateTransaction}
         />
       </div>
@@ -116,6 +161,7 @@ function Page() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua jaminan</SelectItem>
+              <SelectItem value="Belum Diisi">Belum Diisi</SelectItem>
               <SelectItem value="Deposit Uang">Deposit Uang</SelectItem>
               <SelectItem value="Dokumen">Dokumen</SelectItem>
               <SelectItem value="Deposit + Dokumen">Deposit + Dokumen</SelectItem>
@@ -135,10 +181,16 @@ function KeluarCard({
   customer,
   satuan,
   onSubmit,
+  defaultJaminan,
+  defaultDokumen,
+  defaultNominalJaminan,
 }: {
   t: Transaction;
   customer: string;
   satuan: (id: string) => string;
+  defaultJaminan: GuaranteeType;
+  defaultDokumen: DocumentType;
+  defaultNominalJaminan: number;
   onSubmit: (t: Transaction) => void;
 }) {
   const [lines, setLines] = React.useState(
@@ -148,17 +200,31 @@ function KeluarCard({
       kondisi_awal: "Baik" as ItemCondition,
     })),
   );
-  const [depositNominal, setDepositNominal] = React.useState(
-    t.deposit_received > 0 ? t.deposit_received : t.deposit_required,
+  const [jenisJaminan, setJenisJaminan] = React.useState<GuaranteeType>(
+    t.status_jaminan === "Diterima" ? t.jenis_jaminan : defaultJaminan,
+  );
+  const [nominalJaminan, setNominalJaminan] = React.useState(
+    t.deposit_received > 0 ? t.deposit_received : t.nominal_jaminan || defaultNominalJaminan,
   );
   const [depositMethod, setDepositMethod] = React.useState<PaymentMethod>(
     t.deposit_received_method || "Transfer",
   );
   const [depositNote, setDepositNote] = React.useState(t.deposit_received_note || "");
+  const [jenisDokumen, setJenisDokumen] = React.useState<DocumentType>(
+    t.jenis_dokumen || defaultDokumen,
+  );
   const [nomorDokumen, setNomorDokumen] = React.useState(t.nomor_dokumen || "");
   const [fotoDokumen, setFotoDokumen] = React.useState(t.foto_dokumen || []);
-  const butuhDeposit = ["Deposit Uang", "Deposit + Dokumen"].includes(t.jenis_jaminan);
-  const butuhDokumen = ["Dokumen", "Deposit + Dokumen"].includes(t.jenis_jaminan);
+  const butuhDeposit = ["Deposit Uang", "Deposit + Dokumen"].includes(jenisJaminan);
+  const butuhDokumen = ["Dokumen", "Deposit + Dokumen"].includes(jenisJaminan);
+  const adaJaminan = jenisJaminan !== "Tanpa Jaminan";
+
+  React.useEffect(() => {
+    if (t.status_jaminan === "Diterima") return;
+    setJenisJaminan(defaultJaminan);
+    setJenisDokumen(defaultDokumen);
+    setNominalJaminan(defaultNominalJaminan);
+  }, [defaultDokumen, defaultJaminan, defaultNominalJaminan, t.status_jaminan]);
 
   function submit() {
     const invalidLine = lines.find(
@@ -173,7 +239,7 @@ function KeluarCard({
       return;
     }
 
-    if (butuhDeposit && depositNominal <= 0) {
+    if (butuhDeposit && nominalJaminan <= 0) {
       toast.error("Nominal jaminan deposit wajib diisi saat serah terima keluar.");
       return;
     }
@@ -184,17 +250,21 @@ function KeluarCard({
     }
 
     const statusJaminan: GuaranteeStatus =
-      (butuhDeposit ? depositNominal > 0 : true) && (butuhDokumen ? !!nomorDokumen : true)
+      jenisJaminan === "Tanpa Jaminan" ||
+      (adaJaminan && (butuhDeposit ? nominalJaminan > 0 : true) && (butuhDokumen ? !!nomorDokumen : true))
         ? "Diterima"
         : "Belum Diterima";
 
     onSubmit({
       ...t,
       items: lines,
-      deposit_required: t.deposit_required,
-      deposit_received: butuhDeposit ? depositNominal : 0,
+      jenis_jaminan: jenisJaminan,
+      nominal_jaminan: butuhDeposit ? nominalJaminan : 0,
+      jenis_dokumen: butuhDokumen ? jenisDokumen : "KTP",
+      deposit_required: butuhDeposit ? nominalJaminan : 0,
+      deposit_received: butuhDeposit ? nominalJaminan : 0,
       deposit_received_date: butuhDeposit ? toISODate(new Date()) : null,
-      deposit_status: butuhDeposit && depositNominal > 0 ? "Diterima" : "Belum Diterima",
+      deposit_status: butuhDeposit && nominalJaminan > 0 ? "Diterima" : "Belum Diterima",
       deposit_received_method: depositMethod,
       deposit_received_note: depositNote,
       nomor_dokumen: butuhDokumen ? nomorDokumen : "",
@@ -302,25 +372,37 @@ function KeluarCard({
         <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
           <p className="text-sm font-semibold">Jaminan</p>
           <p className="text-xs text-muted-foreground">
-            Data jaminan diambil dari transaksi dan diterima saat serah terima keluar.
+            Input jaminan dilakukan saat serah terima keluar.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Jenis Jaminan</Label>
-              <Input value={t.jenis_jaminan} className="h-9" disabled />
+              <Select
+                value={jenisJaminan}
+                onValueChange={(value) => setJenisJaminan(value as GuaranteeType)}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Deposit Uang", "Dokumen", "Deposit + Dokumen", "Tanpa Jaminan"].map(
+                    (jenis) => (
+                      <SelectItem key={jenis} value={jenis}>
+                        {jenis}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             {butuhDeposit && (
               <>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Nominal Jaminan</Label>
-                  <Input value={formatRupiah(t.nominal_jaminan)} className="h-9" disabled />
+                  <CurrencyInput value={nominalJaminan} onChange={setNominalJaminan} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Nominal Diterima</Label>
-                  <CurrencyInput value={depositNominal} onChange={setDepositNominal} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
+                  <Label className="text-xs text-muted-foreground">Metode Pembayaran Jaminan</Label>
                   <Select
                     value={depositMethod}
                     onValueChange={(value) => setDepositMethod(value as PaymentMethod)}
@@ -338,7 +420,7 @@ function KeluarCard({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Catatan Deposit</Label>
+                  <Label className="text-xs text-muted-foreground">Catatan Jaminan</Label>
                   <Input
                     className="h-9"
                     value={depositNote}
@@ -352,7 +434,21 @@ function KeluarCard({
               <>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Jenis Dokumen</Label>
-                  <Input value={t.jenis_dokumen} className="h-9" disabled />
+                  <Select
+                    value={jenisDokumen}
+                    onValueChange={(value) => setJenisDokumen(value as DocumentType)}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["KTP", "SIM", "Paspor", "Kartu Mahasiswa", "Lainnya"].map((jenis) => (
+                        <SelectItem key={jenis} value={jenis}>
+                          {jenis}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Nomor Dokumen</Label>
@@ -371,6 +467,17 @@ function KeluarCard({
                     onChange={(value) => setFotoDokumen(value as string[])}
                   />
                 </div>
+                {!butuhDeposit && (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs text-muted-foreground">Catatan Jaminan</Label>
+                    <Input
+                      className="h-9"
+                      value={depositNote}
+                      placeholder="opsional"
+                      onChange={(e) => setDepositNote(e.target.value)}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>

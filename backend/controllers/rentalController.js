@@ -37,7 +37,7 @@ const normalisasiMetodeBayar = (metode) =>
     .toLowerCase();
 
 const normalisasiJenisJaminan = (jenis) =>
-  String(jenis || "deposit_uang")
+  String(jenis || "")
     .trim()
     .toLowerCase()
     .replace(/\+/g, "_")
@@ -289,7 +289,7 @@ const siapkanDetail = async (detailPayload, tanggalMulai, tanggalKembali, opsi =
       harga_sewa_per_hari: hargaSewa,
       jumlah_hari: jumlahHari,
       subtotal,
-      denda_per_hari: Number(barang.denda_per_hari || 0),
+      denda_per_hari: 0,
       qty_disiapkan: qtyDisiapkan,
       qty_keluar: qtyKeluar,
       qty_kembali: qtyKembali,
@@ -330,11 +330,12 @@ const hitungTotal = (detail, body = {}) => {
 };
 
 const hitungDataJaminan = (body, defaultJaminan) => {
-  const jenisJaminan = normalisasiJenisJaminan(
-    body.jenis_jaminan || defaultJaminan.jenis_jaminan_default
-  );
+  const jenisJaminanInput = body.jenis_jaminan ?? null;
+  const jenisJaminan = jenisJaminanInput
+    ? normalisasiJenisJaminan(jenisJaminanInput)
+    : null;
   const nominalJaminanInput = Number(
-    body.nominal_jaminan ?? body.deposit_required ?? body.deposit ?? defaultJaminan.nominal_deposit_default
+    body.nominal_jaminan ?? body.deposit_required ?? body.deposit ?? 0
   );
   const nominalJaminan = Math.max(0, nominalJaminanInput);
   const jenisDokumen = perluDokumen(jenisJaminan)
@@ -571,9 +572,18 @@ const ubahRental = asyncHandler(async (req, res) => {
   req.body.deposit_required = dataJaminan.nominalDepositUntukKompat;
   req.body.deposit = dataJaminan.nominalDepositUntukKompat;
   const charges = siapkanCharge(chargePayload);
-  const totalChargeBelumDibayar = charges
-    .filter((item) => !item.potong_dari_jaminan)
+  const depositDiterimaUntukCharge = Number(
+    req.body.deposit_received ?? req.body.depositDiterima ?? rental.deposit_received ?? 0
+  );
+  const totalChargePotongJaminan = charges
+    .filter((item) => item.potong_dari_jaminan)
     .reduce((sum, item) => sum + Number(item.nominal || 0), 0);
+  const potonganJaminan = Math.min(depositDiterimaUntukCharge, totalChargePotongJaminan);
+  const totalChargeBelumDibayar =
+    charges
+      .filter((item) => !item.potong_dari_jaminan)
+      .reduce((sum, item) => sum + Number(item.nominal || 0), 0) +
+    Math.max(0, totalChargePotongJaminan - potonganJaminan);
 
   if (chargeDikirim) {
     req.body.total_denda = totalChargeBelumDibayar;

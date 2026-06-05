@@ -35,6 +35,16 @@ function Page() {
     { key: "keluar", header: "Tgl Keluar", render: (t) => formatDate(t.tanggal_keluar) },
     { key: "harus", header: "Harus Kembali", render: (t) => formatDate(t.tanggal_rencana_kembali) },
     {
+      key: "jaminan",
+      header: "Jaminan",
+      render: (t) =>
+        t.status_jaminan === "Diterima" ? (
+          <span className="text-sm font-medium">{t.jenis_jaminan}</span>
+        ) : (
+          <StatusBadge status="Belum Diterima" />
+        ),
+    },
+    {
       key: "sisa",
       header: "Sisa / Status",
       render: (t) => {

@@ -28,7 +28,7 @@ export const Route = createFileRoute("/pembayaran")({
   component: Page,
 });
 
-const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan", "Denda", "Refund Deposit"];
+const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan", "Denda", "Charge", "Refund Jaminan"];
 const METHODS: PaymentMethod[] = ["Tunai", "Transfer", "QRIS", "Kartu"];
 
 function Page() {
@@ -64,6 +64,26 @@ function Page() {
     const t = transactions.find((x) => x.id === id || x.kode === id);
     return t ? `${t.kode} · ${getCustomer(t.customerId)?.nama}` : id || "-";
   };
+  const selectedTransaction = transactions.find(
+    (t) => t.id === form.transaksiId || t.kode === form.kodeRental,
+  );
+  const totalTagihan = selectedTransaction
+    ? selectedTransaction.total +
+      selectedTransaction.dendaKeterlambatan +
+      selectedTransaction.dendaKerusakan +
+      selectedTransaction.dendaKehilangan
+    : 0;
+  const totalSudahDibayar = Number(selectedTransaction?.terbayar || 0);
+  const sisaRaw = totalTagihan - totalSudahDibayar - form.nominal;
+  const statusAfter =
+    totalSudahDibayar + form.nominal <= 0
+      ? "Belum Bayar"
+      : totalSudahDibayar + form.nominal < totalTagihan
+        ? "Dibayar Sebagian"
+        : "Lunas";
+  const paymentHistory = selectedTransaction
+    ? payments.filter((payment) => payment.transaksiId === selectedTransaction.id)
+    : [];
 
   const columns: Column<Payment>[] = [
     { key: "tanggal", header: "Tanggal", render: (p) => formatDate(p.tanggal) },
@@ -215,6 +235,18 @@ function Page() {
             />
           </div>
         </div>
+        <div className="space-y-2 rounded-xl bg-muted/50 p-4 text-sm">
+          <Row label="Total Tagihan" value={formatRupiah(totalTagihan)} />
+          <Row label="Total Sudah Dibayar" value={formatRupiah(totalSudahDibayar)} />
+          <Row label="Nominal Bayar Sekarang" value={formatRupiah(form.nominal)} />
+          <Row label="Status Setelah Pembayaran" value={statusAfter} />
+          <div className="my-1 border-t" />
+          <Row
+            label={sisaRaw < 0 ? "Lebih Bayar" : "Sisa Setelah Pembayaran"}
+            value={formatRupiah(sisaRaw < 0 ? Math.abs(sisaRaw) : Math.max(0, sisaRaw))}
+            bold
+          />
+        </div>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Catatan</Label>
           <Input
@@ -230,7 +262,44 @@ function Page() {
             onChange={(value) => setForm({ ...form, bukti: String(value) })}
           />
         </div>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Riwayat Pembayaran</Label>
+          {paymentHistory.length === 0 ? (
+            <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+              Belum ada riwayat pembayaran.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border text-sm">
+              {paymentHistory.map((payment) => (
+                <div key={payment.id} className="grid grid-cols-5 gap-2 border-b p-2 last:border-b-0">
+                  <span>{formatDate(payment.tanggal)}</span>
+                  <span>{payment.tipe}</span>
+                  <span>{payment.metode}</span>
+                  <span className="text-right font-medium">{formatRupiah(payment.nominal)}</span>
+                  <span className="text-right text-muted-foreground">Tercatat</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </ModalForm>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  bold,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+}) {
+  return (
+    <div className={`flex items-center justify-between ${bold ? "font-bold" : ""}`}>
+      <span>{label}</span>
+      <span>{value}</span>
     </div>
   );
 }

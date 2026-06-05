@@ -30,7 +30,7 @@ const pembayaranSchema = new mongoose.Schema(
     },
     tipe_bayar: {
       type: String,
-      enum: ["dp", "tambah_dp", "pelunasan", "denda", "refund_deposit"],
+      enum: ["dp", "tambah_dp", "pelunasan", "denda", "charge", "refund_jaminan"],
       default: "dp",
     },
     metode_bayar: {
