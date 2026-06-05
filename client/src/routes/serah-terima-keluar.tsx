@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUpFromLine } from "lucide-react";
+import { ArrowLeft, ArrowUpFromLine, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
 import type { Transaction, ItemCondition, PaymentMethod, GuaranteeStatus } from "@/data/types";
@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { ImageUploader } from "@/components/common/ImageUploader";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,71 @@ const CONDITIONS: ItemCondition[] = ["Baik", "Lecet Ringan", "Rusak Ringan"];
 
 function Page() {
   const { transactions, getCustomer, getItem, updateTransaction } = useStore();
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [filterJaminan, setFilterJaminan] = React.useState("all");
   const list = transactions.filter((t) => t.status === "Siap Keluar");
+  const selected = list.find((t) => t.id === selectedId) || null;
+  const rows = list
+    .filter((t) => filterJaminan === "all" || t.jenis_jaminan === filterJaminan)
+    .map((t) => ({
+      ...t,
+      customer: getCustomer(t.customerId)?.nama ?? "-",
+      barang: t.items.map((item) => `${item.nama} x${item.qty}`).join(", "),
+      qtyTotal: t.items.reduce((sum, item) => sum + item.qty, 0),
+    }));
+  const columns: Column<(typeof rows)[number]>[] = [
+    { key: "kode", header: "Kode" },
+    { key: "customer", header: "Customer" },
+    {
+      key: "periode",
+      header: "Periode",
+      render: (row) => `${formatDate(row.tanggal_mulai)} - ${formatDate(row.tanggal_rencana_kembali)}`,
+    },
+    { key: "barang", header: "Barang", className: "max-w-xs truncate" },
+    { key: "qtyTotal", header: "Qty" },
+    { key: "jaminan", header: "Jaminan", render: (row) => row.jenis_jaminan },
+    { key: "status", header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: "aksi",
+      header: "",
+      className: "text-right",
+      render: (row) => (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(event) => {
+            event.stopPropagation();
+            setSelectedId(row.id);
+          }}
+        >
+          <Eye /> Proses
+        </Button>
+      ),
+    },
+  ];
+
+  if (selected) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Serah Terima Keluar"
+          description="Catat kondisi awal & deposit, lalu keluarkan barang."
+          actions={
+            <Button variant="outline" onClick={() => setSelectedId(null)}>
+              <ArrowLeft /> Kembali
+            </Button>
+          }
+        />
+        <KeluarCard
+          key={selected.id}
+          t={selected}
+          customer={getCustomer(selected.customerId)?.nama ?? "-"}
+          satuan={(id) => getItem(id)?.satuan || "unit"}
+          onSubmit={updateTransaction}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -38,23 +103,29 @@ function Page() {
         title="Serah Terima Keluar"
         description="Catat kondisi awal & deposit, lalu keluarkan barang."
       />
-      {list.length === 0 ? (
-        <div className="rounded-xl border border-dashed py-16 text-center text-sm text-muted-foreground">
-          Tidak ada transaksi siap keluar.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {list.map((t) => (
-            <KeluarCard
-              key={t.id}
-              t={t}
-              customer={getCustomer(t.customerId)?.nama ?? "-"}
-              satuan={(id) => getItem(id)?.satuan || "unit"}
-              onSubmit={updateTransaction}
-            />
-          ))}
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        data={rows}
+        rowKey={(row) => row.id}
+        searchKeys={["kode", "customer", "barang", "status"]}
+        searchPlaceholder="Cari kode, customer, atau barang..."
+        toolbar={
+          <Select value={filterJaminan} onValueChange={setFilterJaminan}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua jaminan</SelectItem>
+              <SelectItem value="Deposit Uang">Deposit Uang</SelectItem>
+              <SelectItem value="Dokumen">Dokumen</SelectItem>
+              <SelectItem value="Deposit + Dokumen">Deposit + Dokumen</SelectItem>
+              <SelectItem value="Tanpa Jaminan">Tanpa Jaminan</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+        onRowClick={(row) => setSelectedId(row.id)}
+        emptyMessage="Tidak ada transaksi siap keluar."
+      />
     </div>
   );
 }

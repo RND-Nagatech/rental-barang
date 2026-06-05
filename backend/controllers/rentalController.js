@@ -1,5 +1,6 @@
 const Rental = require("../models/rentalModel");
 const RentalDetail = require("../models/rentalDetailModel");
+const RentalCharge = require("../models/rentalChargeModel");
 const Barang = require("../models/barangModel");
 const Customer = require("../models/customerModel");
 const Pembayaran = require("../models/pembayaranModel");
@@ -16,6 +17,7 @@ const {
 } = require("../utils/rentalStatus");
 
 const ambilDetailPayload = (body) => body.detail || body.details || body.items || [];
+const ambilChargePayload = (body) => body.charges || body.charge || body.rental_charges || [];
 
 const toDateOnly = (value) => {
   if (!value) return "";
@@ -60,6 +62,27 @@ const normalisasiStatusJaminan = (status) =>
 const perluDeposit = (jenisJaminan) => ["deposit_uang", "deposit_dokumen"].includes(jenisJaminan);
 
 const perluDokumen = (jenisJaminan) => ["dokumen", "deposit_dokumen"].includes(jenisJaminan);
+
+const normalisasiJenisCharge = (jenis) =>
+  String(jenis || "lainnya")
+    .trim()
+    .toLowerCase()
+    .replace(/laundry\/cleaning/g, "laundry_cleaning")
+    .replace(/laundry cleaning/g, "laundry_cleaning")
+    .replace(/\s+/g, "_");
+
+const siapkanCharge = (payload) => {
+  if (!Array.isArray(payload)) return [];
+
+  return payload
+    .map((item) => ({
+      jenis_charge: normalisasiJenisCharge(item.jenis_charge || item.jenisCharge),
+      nominal: Number(item.nominal || 0),
+      catatan: item.catatan || null,
+      potong_dari_jaminan: Boolean(item.potong_dari_jaminan ?? item.potongDariJaminan),
+    }))
+    .filter((item) => item.nominal > 0);
+};
 
 const ambilDefaultJaminan = async () => {
   const pengaturan = await Pengaturan.findOne();
@@ -336,6 +359,9 @@ const kirimRental = async (res, rental, statusCode = 200, pesan = "Data berhasil
   const detail = await RentalDetail.find({ kode_rental: rental.kode_rental }).sort({
     created_at: 1,
   });
+  const charges = await RentalCharge.find({ kode_rental: rental.kode_rental }).sort({
+    created_at: 1,
+  });
 
   res.status(statusCode).json({
     sukses: true,
@@ -343,6 +369,7 @@ const kirimRental = async (res, rental, statusCode = 200, pesan = "Data berhasil
     data: {
       ...rental.toObject(),
       detail,
+      charges,
     },
   });
 };
@@ -367,7 +394,14 @@ const daftarRental = asyncHandler(async (req, res) => {
   const rentals = await Rental.find(filter).sort({ created_at: -1 });
   const kodeRental = rentals.map((item) => item.kode_rental);
   const details = await RentalDetail.find({ kode_rental: { $in: kodeRental } });
+  const charges = await RentalCharge.find({ kode_rental: { $in: kodeRental } });
   const detailMap = details.reduce((map, item) => {
+    const key = item.kode_rental;
+    map[key] = map[key] || [];
+    map[key].push(item);
+    return map;
+  }, {});
+  const chargeMap = charges.reduce((map, item) => {
     const key = item.kode_rental;
     map[key] = map[key] || [];
     map[key].push(item);
@@ -381,6 +415,7 @@ const daftarRental = asyncHandler(async (req, res) => {
     data: rentals.map((item) => ({
       ...item.toObject(),
       detail: detailMap[item.kode_rental] || [],
+      charges: chargeMap[item.kode_rental] || [],
     })),
   });
 });
@@ -509,6 +544,9 @@ const ubahRental = asyncHandler(async (req, res) => {
   const tanggalMulai = req.body.tanggal_mulai || rental.tanggal_mulai;
   const tanggalKembali = req.body.tanggal_rencana_kembali || rental.tanggal_rencana_kembali;
   const detailPayload = ambilDetailPayload(req.body);
+  const chargePayload = ambilChargePayload(req.body);
+  const chargeDikirim =
+    req.body.charges !== undefined || req.body.charge !== undefined || req.body.rental_charges !== undefined;
   const detailSebelumnya = await RentalDetail.find({ kode_rental: rental.kode_rental });
   const detailPayloadDenganQtySebelumnya = detailPayload.map((item) => ({
     ...item,
@@ -532,6 +570,15 @@ const ubahRental = asyncHandler(async (req, res) => {
   );
   req.body.deposit_required = dataJaminan.nominalDepositUntukKompat;
   req.body.deposit = dataJaminan.nominalDepositUntukKompat;
+  const charges = siapkanCharge(chargePayload);
+  const totalChargeBelumDibayar = charges
+    .filter((item) => !item.potong_dari_jaminan)
+    .reduce((sum, item) => sum + Number(item.nominal || 0), 0);
+
+  if (chargeDikirim) {
+    req.body.total_denda = totalChargeBelumDibayar;
+  }
+
   const total = hitungTotal(detail, req.body);
   const statusTujuan = req.body.status ? normalisasiStatus(req.body.status) : rental.status;
   const statusSebelum = rental.status;
@@ -621,14 +668,20 @@ const ubahRental = asyncHandler(async (req, res) => {
   if (statusTujuan === "serah_terima_kembali" || statusTujuan === "selesai") {
     rental.tanggal_kembali = req.body.tanggal_kembali || rental.tanggal_kembali || hariIni();
 
+    const totalPotonganJaminan = chargeDikirim
+      ? charges
+          .filter((item) => item.potong_dari_jaminan)
+          .reduce((sum, item) => sum + Number(item.nominal || 0), 0)
+      : rental.total_denda;
+
     rental.deposit_status = tentukanStatusDeposit(
       rental.deposit_received,
-      rental.total_denda
+      totalPotonganJaminan
     );
     rental.status_jaminan = tentukanStatusJaminanSaatKembali({
       jenisJaminan: rental.jenis_jaminan,
       depositDiterima: rental.deposit_received,
-      totalDenda: rental.total_denda,
+      totalDenda: totalPotonganJaminan,
       statusDokumen: req.body.status_jaminan
         ? normalisasiStatusJaminan(req.body.status_jaminan)
         : perluDokumen(rental.jenis_jaminan)
@@ -647,6 +700,18 @@ const ubahRental = asyncHandler(async (req, res) => {
         ...item,
       }))
     );
+  }
+
+  if (chargeDikirim) {
+    await RentalCharge.deleteMany({ kode_rental: rental.kode_rental });
+    if (charges.length) {
+      await RentalCharge.insertMany(
+        charges.map((item) => ({
+          kode_rental: rental.kode_rental,
+          ...item,
+        }))
+      );
+    }
   }
 
   const kodeBarangBerubah = [
@@ -668,6 +733,7 @@ const hapusRental = asyncHandler(async (req, res) => {
 
   const kodeBarangRental = await ambilKodeBarangRental(rental.kode_rental);
   await RentalDetail.deleteMany({ kode_rental: rental.kode_rental });
+  await RentalCharge.deleteMany({ kode_rental: rental.kode_rental });
   await recalculateStokBarang(kodeBarangRental);
 
   res.json({

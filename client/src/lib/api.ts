@@ -7,6 +7,7 @@ import type {
   Payment,
   PaymentStatus,
   PaymentType,
+  RentalCharge,
   Transaction,
   TransactionStatus,
 } from "@/data/types";
@@ -117,6 +118,15 @@ type ApiRental = MongoDoc & {
   sisa_tagihan?: number;
   catatan?: string | null;
   detail?: ApiRentalDetail[];
+  charges?: ApiRentalCharge[];
+};
+
+type ApiRentalCharge = MongoDoc & {
+  kode_rental: string;
+  jenis_charge: string;
+  nominal: number;
+  catatan?: string | null;
+  potong_dari_jaminan?: boolean;
 };
 
 type ApiPayment = MongoDoc & {
@@ -251,9 +261,35 @@ const tipeBayar = (tipe?: string): PaymentType => {
     dp: "DP",
     tambah_dp: "Tambah DP",
     pelunasan: "Pelunasan",
+    denda: "Denda",
+    refund_deposit: "Refund Deposit",
   };
 
   return map[tipe || ""] || "DP";
+};
+
+const jenisCharge = (jenis?: string): RentalCharge["jenis_charge"] => {
+  const map: Record<string, RentalCharge["jenis_charge"]> = {
+    keterlambatan: "Keterlambatan",
+    kerusakan: "Kerusakan",
+    kehilangan: "Kehilangan",
+    laundry_cleaning: "Laundry/Cleaning",
+    lainnya: "Lainnya",
+  };
+
+  return map[jenis || ""] || "Lainnya";
+};
+
+const jenisChargeApi = (jenis: RentalCharge["jenis_charge"]) => {
+  const map: Record<RentalCharge["jenis_charge"], string> = {
+    Keterlambatan: "keterlambatan",
+    Kerusakan: "kerusakan",
+    Kehilangan: "kehilangan",
+    "Laundry/Cleaning": "laundry_cleaning",
+    Lainnya: "lainnya",
+  };
+
+  return map[jenis] || "lainnya";
 };
 
 const statusDeposit = (status?: string) => {
@@ -423,6 +459,7 @@ export const mapCustomer = (customer: ApiCustomer, totalTransaksi = 0): Customer
 export const mapRental = (rental: ApiRental, customers: Customer[], items: Item[]): Transaction => {
   const customer = customers.find((item) => item.nama === rental.nama_customer);
   const detail = rental.detail || [];
+  const charges = rental.charges || [];
 
   return {
     id: toId(rental),
@@ -472,6 +509,13 @@ export const mapRental = (rental: ApiRental, customers: Customer[], items: Item[
     dendaKeterlambatan: Number(rental.total_denda || 0),
     dendaKerusakan: 0,
     dendaKehilangan: 0,
+    charges: charges.map((charge) => ({
+      id: toId(charge),
+      jenis_charge: jenisCharge(charge.jenis_charge),
+      nominal: Number(charge.nominal || 0),
+      catatan: charge.catatan || "",
+      potong_dari_jaminan: Boolean(charge.potong_dari_jaminan),
+    })),
   };
 };
 
@@ -671,9 +715,19 @@ export const rentalApi = {
           deposit_received_note: transaction.deposit_received_note,
           total_bayar: transaction.terbayar,
           total_denda:
-            transaction.dendaKeterlambatan +
-            transaction.dendaKerusakan +
-            transaction.dendaKehilangan,
+            transaction.charges?.length
+              ? transaction.charges
+                  .filter((charge) => !charge.potong_dari_jaminan)
+                  .reduce((sum, charge) => sum + charge.nominal, 0)
+              : transaction.dendaKeterlambatan +
+                transaction.dendaKerusakan +
+                transaction.dendaKehilangan,
+          charges: (transaction.charges || []).map((charge) => ({
+            jenis_charge: jenisChargeApi(charge.jenis_charge),
+            nominal: charge.nominal,
+            catatan: charge.catatan,
+            potong_dari_jaminan: charge.potong_dari_jaminan,
+          })),
           catatan: transaction.catatan,
           status: statusApi(transaction.status),
           detail: transaction.items.map((line) => {

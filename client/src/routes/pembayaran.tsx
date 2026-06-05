@@ -28,7 +28,7 @@ export const Route = createFileRoute("/pembayaran")({
   component: Page,
 });
 
-const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan"];
+const TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan", "Denda", "Refund Deposit"];
 const METHODS: PaymentMethod[] = ["Tunai", "Transfer", "QRIS", "Kartu"];
 
 function Page() {

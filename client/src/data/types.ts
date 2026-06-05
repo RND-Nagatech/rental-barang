@@ -13,7 +13,8 @@ export type TransactionStatus =
 
 export type PaymentStatus = "Belum Bayar" | "Dibayar Sebagian" | "Lunas";
 
-export type PaymentType = "DP" | "Tambah DP" | "Pelunasan";
+export type PaymentType = "DP" | "Tambah DP" | "Pelunasan" | "Denda" | "Refund Deposit";
+export type ChargeType = "Keterlambatan" | "Kerusakan" | "Kehilangan" | "Laundry/Cleaning" | "Lainnya";
 
 export type DepositStatus =
   | "Belum Diterima"
@@ -102,6 +103,14 @@ export interface TransactionLine {
   catatan: string;
 }
 
+export interface RentalCharge {
+  id?: string;
+  jenis_charge: ChargeType;
+  nominal: number;
+  catatan: string;
+  potong_dari_jaminan: boolean;
+}
+
 export interface Transaction {
   id: string;
   kode: string;
@@ -132,6 +141,7 @@ export interface Transaction {
   dendaKeterlambatan: number;
   dendaKerusakan: number;
   dendaKehilangan: number;
+  charges?: RentalCharge[];
   metode_pembayaran?: PaymentMethod;
   nominal_bayar?: number;
   bukti_pembayaran?: string;
