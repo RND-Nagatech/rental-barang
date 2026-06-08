@@ -105,6 +105,39 @@ const barangSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    thumbnail: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    foto_barang: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    tampil_di_apk: {
+      type: Boolean,
+      default: true,
+    },
+    is_popular: {
+      type: Boolean,
+      default: false,
+    },
+    is_ready: {
+      type: Boolean,
+      default: true,
+    },
+    rating: {
+      type: Number,
+      min: [0, "Rating tidak boleh kurang dari 0"],
+      max: [5, "Rating tidak boleh lebih dari 5"],
+      default: 0,
+    },
+    jumlah_disewa: {
+      type: Number,
+      min: [0, "Jumlah disewa tidak boleh kurang dari 0"],
+      default: 0,
+    },
     status_aktif: {
       type: Boolean,
       default: true,

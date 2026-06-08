@@ -13,9 +13,17 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { navGroups } from "./nav-config";
+import { adminAuth } from "@/lib/adminAuth";
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const user = adminAuth.getUser();
+  const initial = (user?.nama_user || user?.email || "AD")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
 
@@ -60,11 +68,12 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="flex items-center gap-2.5 px-1 py-1">
           <div className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-sm font-semibold">
-            AD
+            {initial || "AD"}
           </div>
           <div className="grid group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-medium leading-none">Admin Operasional</span>
-            <span className="text-xs text-sidebar-foreground/60">admin@rentory.id</span>
+            <span className="text-sm font-medium leading-none">{user?.nama_user || "Admin"}</span>
+            <span className="text-xs text-sidebar-foreground/60">{user?.email || "-"}</span>
+            <span className="text-[11px] capitalize text-sidebar-foreground/50">{user?.role || "admin"}</span>
           </div>
         </div>
       </SidebarFooter>

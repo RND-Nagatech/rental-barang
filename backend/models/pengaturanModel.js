@@ -19,6 +19,21 @@ const pengaturanSchema = new mongoose.Schema(
       trim: true,
       default: "Jl. Operasional No. 1, Jakarta",
     },
+    app_name: {
+      type: String,
+      trim: true,
+      default: "Rentory",
+    },
+    home_headline: {
+      type: String,
+      trim: true,
+      default: "Sewa apa saja, kapan saja. Mudah & terpercaya.",
+    },
+    home_subheadline: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     denda_keterlambatan_default: {
       type: Number,
       min: [0, "Denda keterlambatan default tidak boleh kurang dari 0"],

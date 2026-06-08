@@ -16,6 +16,8 @@ import { Route as SerahTerimaKeluarRouteImport } from './routes/serah-terima-kel
 import { Route as SedangDisewaRouteImport } from './routes/sedang-disewa'
 import { Route as PengaturanRouteImport } from './routes/pengaturan'
 import { Route as PembayaranRouteImport } from './routes/pembayaran'
+import { Route as ManageUserRouteImport } from './routes/manage-user'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as LaporanRouteImport } from './routes/laporan'
 import { Route as KategoriRouteImport } from './routes/kategori'
 import { Route as KalenderRouteImport } from './routes/kalender'
@@ -58,6 +60,16 @@ const PembayaranRoute = PembayaranRouteImport.update({
   path: '/pembayaran',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ManageUserRoute = ManageUserRouteImport.update({
+  id: '/manage-user',
+  path: '/manage-user',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LaporanRoute = LaporanRouteImport.update({
   id: '/laporan',
   path: '/laporan',
@@ -96,6 +108,8 @@ export interface FileRoutesByFullPath {
   '/kalender': typeof KalenderRoute
   '/kategori': typeof KategoriRoute
   '/laporan': typeof LaporanRoute
+  '/login': typeof LoginRoute
+  '/manage-user': typeof ManageUserRoute
   '/pembayaran': typeof PembayaranRoute
   '/pengaturan': typeof PengaturanRoute
   '/sedang-disewa': typeof SedangDisewaRoute
@@ -111,6 +125,8 @@ export interface FileRoutesByTo {
   '/kalender': typeof KalenderRoute
   '/kategori': typeof KategoriRoute
   '/laporan': typeof LaporanRoute
+  '/login': typeof LoginRoute
+  '/manage-user': typeof ManageUserRoute
   '/pembayaran': typeof PembayaranRoute
   '/pengaturan': typeof PengaturanRoute
   '/sedang-disewa': typeof SedangDisewaRoute
@@ -127,6 +143,8 @@ export interface FileRoutesById {
   '/kalender': typeof KalenderRoute
   '/kategori': typeof KategoriRoute
   '/laporan': typeof LaporanRoute
+  '/login': typeof LoginRoute
+  '/manage-user': typeof ManageUserRoute
   '/pembayaran': typeof PembayaranRoute
   '/pengaturan': typeof PengaturanRoute
   '/sedang-disewa': typeof SedangDisewaRoute
@@ -144,6 +162,8 @@ export interface FileRouteTypes {
     | '/kalender'
     | '/kategori'
     | '/laporan'
+    | '/login'
+    | '/manage-user'
     | '/pembayaran'
     | '/pengaturan'
     | '/sedang-disewa'
@@ -159,6 +179,8 @@ export interface FileRouteTypes {
     | '/kalender'
     | '/kategori'
     | '/laporan'
+    | '/login'
+    | '/manage-user'
     | '/pembayaran'
     | '/pengaturan'
     | '/sedang-disewa'
@@ -174,6 +196,8 @@ export interface FileRouteTypes {
     | '/kalender'
     | '/kategori'
     | '/laporan'
+    | '/login'
+    | '/manage-user'
     | '/pembayaran'
     | '/pengaturan'
     | '/sedang-disewa'
@@ -190,6 +214,8 @@ export interface RootRouteChildren {
   KalenderRoute: typeof KalenderRoute
   KategoriRoute: typeof KategoriRoute
   LaporanRoute: typeof LaporanRoute
+  LoginRoute: typeof LoginRoute
+  ManageUserRoute: typeof ManageUserRoute
   PembayaranRoute: typeof PembayaranRoute
   PengaturanRoute: typeof PengaturanRoute
   SedangDisewaRoute: typeof SedangDisewaRoute
@@ -250,6 +276,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PembayaranRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/manage-user': {
+      id: '/manage-user'
+      path: '/manage-user'
+      fullPath: '/manage-user'
+      preLoaderRoute: typeof ManageUserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/laporan': {
       id: '/laporan'
       path: '/laporan'
@@ -302,6 +342,8 @@ const rootRouteChildren: RootRouteChildren = {
   KalenderRoute: KalenderRoute,
   KategoriRoute: KategoriRoute,
   LaporanRoute: LaporanRoute,
+  LoginRoute: LoginRoute,
+  ManageUserRoute: ManageUserRoute,
   PembayaranRoute: PembayaranRoute,
   PengaturanRoute: PengaturanRoute,
   SedangDisewaRoute: SedangDisewaRoute,

@@ -20,6 +20,25 @@ const kategoriSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    icon_kategori: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    gambar_kategori: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    urutan_tampil: {
+      type: Number,
+      min: [0, "Urutan tampil tidak boleh kurang dari 0"],
+      default: 0,
+    },
+    tampil_di_apk: {
+      type: Boolean,
+      default: true,
+    },
     status_aktif: {
       type: Boolean,
       default: true,

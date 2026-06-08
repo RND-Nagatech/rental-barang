@@ -12,6 +12,7 @@ import {
   CalendarDays,
   BarChart3,
   Settings,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -56,6 +57,7 @@ export const navGroups: NavGroup[] = [
       { title: "Kalender Ketersediaan", url: "/kalender", icon: CalendarDays },
       { title: "Laporan", url: "/laporan", icon: BarChart3 },
       { title: "Pengaturan", url: "/pengaturan", icon: Settings },
+      { title: "Manage User", url: "/manage-user", icon: UserCog },
     ],
   },
 ];

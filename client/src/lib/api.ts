@@ -37,6 +37,11 @@ type ApiCategory = MongoDoc & {
   kode_kategori: string;
   nama_kategori: string;
   deskripsi?: string | null;
+  icon_kategori?: string | null;
+  gambar_kategori?: string | null;
+  urutan_tampil?: number;
+  tampil_di_apk?: boolean;
+  status_aktif?: boolean;
 };
 
 type ApiItem = MongoDoc & {
@@ -44,6 +49,8 @@ type ApiItem = MongoDoc & {
   nama_barang: string;
   id_kategori?: string | ApiCategory;
   foto?: string | null;
+  thumbnail?: string | null;
+  foto_barang?: string | null;
   harga_sewa_per_hari?: number;
   denda_per_hari?: number;
   deposit_default?: number;
@@ -55,6 +62,11 @@ type ApiItem = MongoDoc & {
   stok_hilang?: number;
   kondisi?: string;
   status_aktif?: boolean;
+  tampil_di_apk?: boolean;
+  is_popular?: boolean;
+  is_ready?: boolean;
+  rating?: number;
+  jumlah_disewa?: number;
   satuan?: string;
   status?: string;
 };
@@ -148,10 +160,31 @@ type ApiUpload = {
   url: string;
 };
 
+type AdminLoginResponse = {
+  success: boolean;
+  token: string;
+  user: AdminUserApi;
+};
+
+export type AdminUserApi = {
+  id: string;
+  _id?: string;
+  kode_user: string;
+  nama_user: string;
+  email: string;
+  role: "admin" | "staff";
+  status_aktif: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Pengaturan = {
   nama_usaha: string;
   telepon: string;
   alamat: string;
+  app_name: string;
+  home_headline: string;
+  home_subheadline?: string;
   default_denda_per_hari?: number;
   denda_keterlambatan_default: number;
   deposit_minimum_default: number;
@@ -173,11 +206,11 @@ export type Pengaturan = {
 
 const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_URL}${path}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
     },
-    ...options,
   });
 
   const json = await response.json().catch(() => null);
@@ -193,6 +226,69 @@ export const absoluteFileUrl = (url?: string | null) => {
   if (!url) return "";
   if (/^https?:\/\//.test(url)) return url;
   return `${BASE_URL}${url}`;
+};
+
+export const authApi = {
+  adminLogin: async (input: { email: string; password: string }) =>
+    request<AdminLoginResponse>("/auth/admin/login", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  adminMe: async (token: string) =>
+    request<{ success: boolean; user: AdminUserApi }>("/auth/admin/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+};
+
+const adminHeaders = () => {
+  const token =
+    typeof window === "undefined" ? "" : window.localStorage.getItem("rentory_admin_token") || "";
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+export const adminUserApi = {
+  list: async () =>
+    request<ApiList<AdminUserApi>>("/admin/users", {
+      headers: adminHeaders(),
+    }),
+  create: async (input: {
+    nama_user: string;
+    email: string;
+    password: string;
+    role: "admin" | "staff";
+    status_aktif: boolean;
+  }) =>
+    request<ApiSingle<AdminUserApi>>("/admin/users", {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify(input),
+    }),
+  update: async (
+    id: string,
+    input: { nama_user: string; email: string; role: "admin" | "staff"; status_aktif: boolean },
+  ) =>
+    request<ApiSingle<AdminUserApi>>(`/admin/users/${id}`, {
+      method: "PUT",
+      headers: adminHeaders(),
+      body: JSON.stringify(input),
+    }),
+  setStatus: async (id: string, status_aktif: boolean) =>
+    request<ApiSingle<AdminUserApi>>(`/admin/users/${id}/status`, {
+      method: "PATCH",
+      headers: adminHeaders(),
+      body: JSON.stringify({ status_aktif }),
+    }),
+  resetPassword: async (id: string, password: string) =>
+    request<ApiSingle<AdminUserApi>>(`/admin/users/${id}/reset-password`, {
+      method: "PATCH",
+      headers: adminHeaders(),
+      body: JSON.stringify({ password }),
+    }),
+  remove: async (id: string) =>
+    request<ApiSingle<AdminUserApi>>(`/admin/users/${id}`, {
+      method: "DELETE",
+      headers: adminHeaders(),
+    }),
 };
 
 const toId = (doc: MongoDoc) => doc.id || doc._id;
@@ -421,7 +517,12 @@ export const mapCategory = (category: ApiCategory): Category => ({
   kode: category.kode_kategori,
   nama: category.nama_kategori,
   deskripsi: category.deskripsi || "",
-  icon: "Tag",
+  icon: category.icon_kategori || "Tag",
+  icon_kategori: category.icon_kategori || "",
+  gambar_kategori: category.gambar_kategori || "",
+  urutan_tampil: Number(category.urutan_tampil || 0),
+  tampil_di_apk: category.tampil_di_apk !== false,
+  status_aktif: category.status_aktif !== false,
 });
 
 export const mapItem = (item: ApiItem): Item => {
@@ -434,7 +535,7 @@ export const mapItem = (item: ApiItem): Item => {
     nama_barang: item.nama_barang,
     satuan: item.satuan || "unit",
     kategoriId,
-    foto: item.foto || "📦",
+    foto: item.foto_barang || item.thumbnail || item.foto || "📦",
     harga_sewa_per_hari: Number(item.harga_sewa_per_hari || 0),
     denda_per_hari: Number(item.denda_per_hari || 0),
     stok_total: Number(item.stok_total || 0),
@@ -444,6 +545,11 @@ export const mapItem = (item: ApiItem): Item => {
     stok_maintenance: Number(item.stok_maintenance || 0),
     stok_hilang: Number(item.stok_hilang || 0),
     deposit_default: Number(item.deposit_default || 0),
+    tampil_di_apk: item.tampil_di_apk !== false,
+    is_popular: Boolean(item.is_popular),
+    is_ready: item.is_ready !== false,
+    rating: Number(item.rating || 0),
+    jumlah_disewa: Number(item.jumlah_disewa || 0),
     status: statusBarang(item),
     kondisi: kondisiBarang(item.kondisi),
     riwayat: [],
@@ -534,6 +640,11 @@ export const kategoriApi = {
             kode_kategori: category.kode,
             nama_kategori: category.nama,
             deskripsi: category.deskripsi,
+            icon_kategori: category.icon_kategori || category.icon,
+            gambar_kategori: category.gambar_kategori || "",
+            urutan_tampil: category.urutan_tampil ?? 0,
+            tampil_di_apk: category.tampil_di_apk !== false,
+            status_aktif: category.status_aktif !== false,
           }),
         })
       ).data,
@@ -547,6 +658,11 @@ export const kategoriApi = {
             kode_kategori: category.kode,
             nama_kategori: category.nama,
             deskripsi: category.deskripsi,
+            icon_kategori: category.icon_kategori || category.icon,
+            gambar_kategori: category.gambar_kategori || "",
+            urutan_tampil: category.urutan_tampil ?? 0,
+            tampil_di_apk: category.tampil_di_apk !== false,
+            status_aktif: category.status_aktif !== false,
           }),
         })
       ).data,
@@ -566,6 +682,8 @@ export const barangApi = {
             satuan: item.satuan,
             id_kategori: item.kategoriId,
             foto: item.foto,
+            thumbnail: item.foto,
+            foto_barang: item.foto,
             harga_sewa_per_hari: item.harga_sewa_per_hari,
             stok_total: item.stok_total,
             stok_tersedia: item.stok_tersedia,
@@ -574,6 +692,11 @@ export const barangApi = {
             stok_maintenance: item.stok_maintenance,
             stok_hilang: item.stok_hilang,
             kondisi: kondisiApi(item.kondisi),
+            tampil_di_apk: item.tampil_di_apk !== false,
+            is_popular: Boolean(item.is_popular),
+            is_ready: item.is_ready !== false,
+            rating: item.rating ?? 0,
+            jumlah_disewa: item.jumlah_disewa ?? 0,
             status_aktif: item.status !== "Maintenance",
           }),
         })
@@ -590,6 +713,8 @@ export const barangApi = {
             satuan: item.satuan,
             id_kategori: item.kategoriId,
             foto: item.foto,
+            thumbnail: item.foto,
+            foto_barang: item.foto,
             harga_sewa_per_hari: item.harga_sewa_per_hari,
             stok_total: item.stok_total,
             stok_tersedia: item.stok_tersedia,
@@ -598,6 +723,11 @@ export const barangApi = {
             stok_maintenance: item.stok_maintenance,
             stok_hilang: item.stok_hilang,
             kondisi: kondisiApi(item.kondisi),
+            tampil_di_apk: item.tampil_di_apk !== false,
+            is_popular: Boolean(item.is_popular),
+            is_ready: item.is_ready !== false,
+            rating: item.rating ?? 0,
+            jumlah_disewa: item.jumlah_disewa ?? 0,
             status_aktif: item.status !== "Maintenance",
           }),
         })

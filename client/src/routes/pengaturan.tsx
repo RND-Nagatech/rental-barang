@@ -27,6 +27,9 @@ function Page() {
   const [nama, setNama] = React.useState("Rentory Rental");
   const [telepon, setTelepon] = React.useState("0812-0000-0000");
   const [alamat, setAlamat] = React.useState("Jl. Operasional No. 1, Jakarta");
+  const [appName, setAppName] = React.useState("Rentory");
+  const [homeHeadline, setHomeHeadline] = React.useState("Sewa apa saja, kapan saja. Mudah & terpercaya.");
+  const [homeSubheadline, setHomeSubheadline] = React.useState("");
   const [denda, setDenda] = React.useState(25000);
   const [deposit, setDeposit] = React.useState(100000);
   const [jenisJaminan, setJenisJaminan] = React.useState("deposit_uang");
@@ -58,6 +61,9 @@ function Page() {
         setNama(data.nama_usaha);
         setTelepon(data.telepon);
         setAlamat(data.alamat);
+        setAppName(data.app_name || "Rentory");
+        setHomeHeadline(data.home_headline || "Sewa apa saja, kapan saja. Mudah & terpercaya.");
+        setHomeSubheadline(data.home_subheadline || "");
         setDenda(data.denda_keterlambatan_default);
         setDeposit(data.nominal_deposit_default ?? data.deposit_minimum_default);
         setJenisJaminan(data.jenis_jaminan_default || "deposit_uang");
@@ -87,6 +93,9 @@ function Page() {
         nama_usaha: nama,
         telepon,
         alamat,
+        app_name: appName,
+        home_headline: homeHeadline,
+        home_subheadline: homeSubheadline,
         denda_keterlambatan_default: denda,
         deposit_minimum_default: deposit,
         jenis_jaminan_default: jenisJaminan,
@@ -279,6 +288,26 @@ function Page() {
                   <SelectItem value="lainnya">Lainnya</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">Beranda APK Customer</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nama Aplikasi</Label>
+              <Input value={appName} onChange={(e) => setAppName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs text-muted-foreground">Headline Beranda</Label>
+              <Input value={homeHeadline} onChange={(e) => setHomeHeadline(e.target.value)} />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs text-muted-foreground">Subheadline Beranda</Label>
+              <Input value={homeSubheadline} onChange={(e) => setHomeSubheadline(e.target.value)} placeholder="Opsional" />
             </div>
           </CardContent>
         </Card>

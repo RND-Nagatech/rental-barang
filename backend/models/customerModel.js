@@ -36,6 +36,16 @@ const customerSchema = new mongoose.Schema(
       lowercase: true,
       default: null,
     },
+    foto_profile: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    password_hash: {
+      type: String,
+      default: null,
+      select: false,
+    },
     alamat: {
       type: String,
       trim: true,

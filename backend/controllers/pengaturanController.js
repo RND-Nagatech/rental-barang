@@ -20,6 +20,9 @@ const defaultPengaturan = {
   nama_usaha: "Rentory Rental",
   telepon: "0812-0000-0000",
   alamat: "Jl. Operasional No. 1, Jakarta",
+  app_name: "Rentory",
+  home_headline: "Sewa apa saja, kapan saja. Mudah & terpercaya.",
+  home_subheadline: "",
   denda_keterlambatan_default: 25000,
   deposit_minimum_default: 100000,
   jenis_jaminan_default: "deposit_uang",
@@ -60,6 +63,12 @@ const normalisasiBodyPengaturan = (body = {}) => {
   if (!hasil.jenis_dokumen_default) {
     hasil.jenis_dokumen_default = defaultPengaturan.jenis_dokumen_default;
   }
+
+  hasil.app_name = String(hasil.app_name || defaultPengaturan.app_name).trim();
+  hasil.home_headline = String(
+    hasil.home_headline || defaultPengaturan.home_headline
+  ).trim();
+  hasil.home_subheadline = String(hasil.home_subheadline || "").trim();
 
   hasil.wa_enabled = Boolean(hasil.wa_enabled);
   hasil.wa_connection_mode =

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -54,6 +55,11 @@ const emptyForm = (kategoriId: string): Omit<Item, "id" | "riwayat"> => ({
   stok_maintenance: 0,
   stok_hilang: 0,
   deposit_default: 0,
+  tampil_di_apk: true,
+  is_popular: false,
+  is_ready: true,
+  rating: 0,
+  jumlah_disewa: 0,
   status: "Tersedia",
   kondisi: "Baik",
 });
@@ -124,6 +130,19 @@ function BarangPage() {
     },
     { key: "harga", header: "Sewa/hari", render: (i) => formatRupiah(i.harga_sewa_per_hari) },
     { key: "satuan", header: "Satuan", render: (i) => i.satuan },
+    {
+      key: "apk",
+      header: "APK",
+      render: (i) => (
+        <div className="flex flex-wrap gap-1">
+          <Badge variant={i.tampil_di_apk === false ? "outline" : "default"}>
+            {i.tampil_di_apk === false ? "Hidden" : "Tampil"}
+          </Badge>
+          {i.is_popular && <Badge variant="secondary">Popular</Badge>}
+          {i.is_ready !== false && <Badge variant="secondary">Ready</Badge>}
+        </div>
+      ),
+    },
     {
       key: "stok",
       header: "Stok Gudang",
@@ -337,6 +356,38 @@ function BarangPage() {
               </SelectContent>
             </Select>
           </Field>
+          <Field label="Rating APK">
+            <Input
+              type="number"
+              min={0}
+              max={5}
+              step={0.1}
+              value={form.rating ?? 0}
+              onChange={(e) => setForm({ ...form, rating: +e.target.value })}
+            />
+          </Field>
+          <Field label="Jumlah Disewa APK">
+            <Input
+              type="number"
+              min={0}
+              value={form.jumlah_disewa ?? 0}
+              onChange={(e) => setForm({ ...form, jumlah_disewa: +e.target.value })}
+            />
+          </Field>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">Tampil di APK</Label>
+            <Switch checked={form.tampil_di_apk !== false} onCheckedChange={(value) => setForm({ ...form, tampil_di_apk: value })} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">Paling Populer</Label>
+            <Switch checked={Boolean(form.is_popular)} onCheckedChange={(value) => setForm({ ...form, is_popular: value })} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">Siap Disewa</Label>
+            <Switch checked={form.is_ready !== false} onCheckedChange={(value) => setForm({ ...form, is_ready: value })} />
+          </div>
         </div>
         <Field label="Foto Barang">
           <ImageUploader
@@ -367,6 +418,11 @@ function BarangPage() {
               <Info label="Kategori" value={getCategory(detail.kategoriId)?.nama ?? "-"} />
               <Info label="Satuan" value={detail.satuan} />
               <Info label="Sewa / Hari" value={formatRupiah(detail.harga_sewa_per_hari)} />
+              <Info label="Tampil APK" value={detail.tampil_di_apk === false ? "Tidak" : "Ya"} />
+              <Info label="Popular APK" value={detail.is_popular ? "Ya" : "Tidak"} />
+              <Info label="Ready APK" value={detail.is_ready === false ? "Tidak" : "Ya"} />
+              <Info label="Rating" value={formatNumber(detail.rating || 0)} />
+              <Info label="Jumlah Disewa" value={formatNumber(detail.jumlah_disewa || 0)} />
               <Info label="Stok Total" value={formatNumber(detail.stok_total)} />
               <Info label="Stok Gudang" value={formatNumber(detail.stok_di_gudang)} />
               <Info label="Sedang Keluar" value={formatNumber(detail.stok_sedang_keluar)} />

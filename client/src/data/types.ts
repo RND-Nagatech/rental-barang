@@ -52,6 +52,11 @@ export interface Category {
   nama: string;
   deskripsi: string;
   icon: string;
+  icon_kategori?: string;
+  gambar_kategori?: string;
+  urutan_tampil?: number;
+  tampil_di_apk?: boolean;
+  status_aktif?: boolean;
 }
 
 export interface ItemHistory {
@@ -79,6 +84,11 @@ export interface Item {
   stok_maintenance: number;
   stok_hilang: number;
   deposit_default: number;
+  tampil_di_apk?: boolean;
+  is_popular?: boolean;
+  is_ready?: boolean;
+  rating?: number;
+  jumlah_disewa?: number;
   status: ItemStatus;
   kondisi: ItemCondition;
   riwayat: ItemHistory[];

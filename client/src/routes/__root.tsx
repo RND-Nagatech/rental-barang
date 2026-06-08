@@ -6,8 +6,9 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -16,6 +17,8 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { adminAuth } from "@/lib/adminAuth";
+import { authApi } from "@/lib/api";
 
 function NotFoundComponent() {
   return (
@@ -130,20 +133,74 @@ function RootShell({ children }: { children: ReactNode }) {
 const queryClient = new QueryClient();
 
 function RootComponent() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  if (pathname === "/login") {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+        <Toaster richColors position="top-right" />
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
-      <AppStoreProvider>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <AppHeader />
-            <main className="flex-1 p-4 md:p-6">
-              <Outlet />
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
-        <Toaster richColors position="top-right" />
-      </AppStoreProvider>
+      <AdminAuthGate>
+        <AppStoreProvider>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset>
+              <AppHeader />
+              <main className="flex-1 p-4 md:p-6">
+                <Outlet />
+              </main>
+            </SidebarInset>
+          </SidebarProvider>
+        </AppStoreProvider>
+      </AdminAuthGate>
+      <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
+}
+
+function AdminAuthGate({ children }: { children: ReactNode }) {
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkSession() {
+      const token = adminAuth.getToken();
+      if (!token) {
+        window.location.replace("/login");
+        return;
+      }
+
+      try {
+        const response = await authApi.adminMe(token);
+        if (cancelled) return;
+        adminAuth.save(token, response.user);
+        setChecked(true);
+      } catch {
+        adminAuth.clear();
+        window.location.replace("/login");
+      }
+    }
+
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!checked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Memeriksa session admin...
+      </div>
+    );
+  }
+
+  return children;
 }
