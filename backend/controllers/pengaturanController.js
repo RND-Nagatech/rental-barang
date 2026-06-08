@@ -20,6 +20,19 @@ const defaultPengaturan = {
   nama_usaha: "Rentory Rental",
   telepon: "0812-0000-0000",
   alamat: "Jl. Operasional No. 1, Jakarta",
+  tentang_rentory:
+    "Rentory adalah platform rental barang yang membantu customer menyewa kebutuhan acara, perlengkapan, dan barang harian dengan proses yang mudah, transparan, dan terpercaya.",
+  bantuan_whatsapp: "",
+  bantuan_faq: [
+    {
+      pertanyaan: "Bagaimana cara membuat pesanan?",
+      jawaban: "Pilih barang dari katalog, masukkan ke keranjang, lalu checkout.",
+    },
+    {
+      pertanyaan: "Kapan jaminan dibayarkan?",
+      jawaban: "Jaminan dicatat admin saat serah terima keluar.",
+    },
+  ],
   app_name: "Rentory",
   home_headline: "Sewa apa saja, kapan saja. Mudah & terpercaya.",
   home_subheadline: "",
@@ -69,6 +82,18 @@ const normalisasiBodyPengaturan = (body = {}) => {
     hasil.home_headline || defaultPengaturan.home_headline
   ).trim();
   hasil.home_subheadline = String(hasil.home_subheadline || "").trim();
+  hasil.tentang_rentory = String(
+    hasil.tentang_rentory || defaultPengaturan.tentang_rentory
+  ).trim();
+  hasil.bantuan_whatsapp = String(hasil.bantuan_whatsapp || "").trim();
+  hasil.bantuan_faq = Array.isArray(hasil.bantuan_faq)
+    ? hasil.bantuan_faq
+        .map((item) => ({
+          pertanyaan: String(item?.pertanyaan || "").trim(),
+          jawaban: String(item?.jawaban || "").trim(),
+        }))
+        .filter((item) => item.pertanyaan || item.jawaban)
+    : defaultPengaturan.bantuan_faq;
 
   hasil.wa_enabled = Boolean(hasil.wa_enabled);
   hasil.wa_connection_mode =

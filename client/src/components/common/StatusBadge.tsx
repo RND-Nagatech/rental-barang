@@ -19,7 +19,7 @@ const statusTone: Record<string, Tone> = {
   "Sedang Disewa": "primary",
   "Serah Terima Kembali": "info",
   Selesai: "success",
-  Dibatalkan: "danger",
+  Batal: "danger",
   // Pembayaran
   "Belum Bayar": "danger",
   "Dibayar Sebagian": "warning",

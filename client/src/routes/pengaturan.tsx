@@ -8,6 +8,7 @@ import { CurrencyInput } from "@/components/common/CurrencyInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -27,6 +28,20 @@ function Page() {
   const [nama, setNama] = React.useState("Rentory Rental");
   const [telepon, setTelepon] = React.useState("0812-0000-0000");
   const [alamat, setAlamat] = React.useState("Jl. Operasional No. 1, Jakarta");
+  const [tentangRentory, setTentangRentory] = React.useState(
+    "Rentory adalah platform rental barang yang membantu customer menyewa kebutuhan acara, perlengkapan, dan barang harian dengan proses yang mudah, transparan, dan terpercaya.",
+  );
+  const [bantuanWhatsapp, setBantuanWhatsapp] = React.useState("");
+  const [bantuanFaq, setBantuanFaq] = React.useState([
+    {
+      pertanyaan: "Bagaimana cara membuat pesanan?",
+      jawaban: "Pilih barang dari katalog, masukkan ke keranjang, lalu checkout.",
+    },
+    {
+      pertanyaan: "Kapan jaminan dibayarkan?",
+      jawaban: "Jaminan dicatat admin saat serah terima keluar.",
+    },
+  ]);
   const [appName, setAppName] = React.useState("Rentory");
   const [homeHeadline, setHomeHeadline] = React.useState("Sewa apa saja, kapan saja. Mudah & terpercaya.");
   const [homeSubheadline, setHomeSubheadline] = React.useState("");
@@ -61,6 +76,22 @@ function Page() {
         setNama(data.nama_usaha);
         setTelepon(data.telepon);
         setAlamat(data.alamat);
+        setTentangRentory(data.tentang_rentory || "");
+        setBantuanWhatsapp(data.bantuan_whatsapp || "");
+        setBantuanFaq(
+          Array.isArray(data.bantuan_faq) && data.bantuan_faq.length > 0
+            ? data.bantuan_faq
+            : [
+                {
+                  pertanyaan: "Bagaimana cara membuat pesanan?",
+                  jawaban: "Pilih barang dari katalog, masukkan ke keranjang, lalu checkout.",
+                },
+                {
+                  pertanyaan: "Kapan jaminan dibayarkan?",
+                  jawaban: "Jaminan dicatat admin saat serah terima keluar.",
+                },
+              ],
+        );
         setAppName(data.app_name || "Rentory");
         setHomeHeadline(data.home_headline || "Sewa apa saja, kapan saja. Mudah & terpercaya.");
         setHomeSubheadline(data.home_subheadline || "");
@@ -93,6 +124,9 @@ function Page() {
         nama_usaha: nama,
         telepon,
         alamat,
+        tentang_rentory: tentangRentory,
+        bantuan_whatsapp: bantuanWhatsapp,
+        bantuan_faq: bantuanFaq.filter((item) => item.pertanyaan.trim() || item.jawaban.trim()),
         app_name: appName,
         home_headline: homeHeadline,
         home_subheadline: homeSubheadline,
@@ -235,6 +269,15 @@ function Page() {
               <Label className="text-xs text-muted-foreground">Alamat</Label>
               <Input value={alamat} onChange={(e) => setAlamat(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Tentang Rentory</Label>
+              <Textarea
+                value={tentangRentory}
+                onChange={(e) => setTentangRentory(e.target.value)}
+                placeholder="Deskripsi tentang Rentory yang tampil di APK customer."
+                className="min-h-28"
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -308,6 +351,79 @@ function Page() {
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs text-muted-foreground">Subheadline Beranda</Label>
               <Input value={homeSubheadline} onChange={(e) => setHomeSubheadline(e.target.value)} placeholder="Opsional" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">Bantuan APK Customer</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">WhatsApp Bantuan</Label>
+              <Input
+                value={bantuanWhatsapp}
+                onChange={(e) => setBantuanWhatsapp(e.target.value)}
+                placeholder="Kosongkan untuk memakai telepon profil usaha"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">FAQ Bantuan</p>
+                  <p className="text-xs text-muted-foreground">Pertanyaan dan jawaban yang akan tampil di Bantuan APK.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setBantuanFaq((items) => [...items, { pertanyaan: "", jawaban: "" }])
+                  }
+                >
+                  Tambah FAQ
+                </Button>
+              </div>
+
+              {bantuanFaq.map((item, index) => (
+                <div key={index} className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_auto]">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Pertanyaan</Label>
+                    <Input
+                      value={item.pertanyaan}
+                      onChange={(e) =>
+                        setBantuanFaq((items) =>
+                          items.map((faq, idx) =>
+                            idx === index ? { ...faq, pertanyaan: e.target.value } : faq,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Jawaban</Label>
+                    <Input
+                      value={item.jawaban}
+                      onChange={(e) =>
+                        setBantuanFaq((items) =>
+                          items.map((faq, idx) =>
+                            idx === index ? { ...faq, jawaban: e.target.value } : faq,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="self-end text-destructive"
+                    onClick={() => setBantuanFaq((items) => items.filter((_, idx) => idx !== index))}
+                  >
+                    Hapus
+                  </Button>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

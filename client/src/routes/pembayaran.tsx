@@ -1,9 +1,9 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
-import type { Payment, PaymentMethod, PaymentType } from "@/data/types";
+import type { Payment, PaymentMethod, PaymentType, Transaction } from "@/data/types";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -15,6 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -22,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatRupiah, formatDate, toISODate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pembayaran")({
   head: () => ({ meta: [{ title: "Pembayaran — Rentory" }] }),
@@ -37,7 +47,6 @@ function Page() {
   const today = toISODate(new Date());
   const [form, setForm] = React.useState({
     transaksiId: "",
-    kodeRental: "",
     tanggal: today,
     tipe: "DP" as PaymentType,
     metode: "Transfer" as PaymentMethod,
@@ -46,9 +55,21 @@ function Page() {
     catatan: "",
   });
 
+  function resetForm() {
+    setForm({
+      transaksiId: "",
+      tanggal: today,
+      tipe: "DP",
+      metode: "Transfer",
+      nominal: 0,
+      bukti: "",
+      catatan: "",
+    });
+  }
+
   async function save() {
-    if ((!form.transaksiId && !form.kodeRental) || !form.nominal) {
-      return toast.error("Pilih/isi kode rental & isi nominal.");
+    if (!form.transaksiId || !form.nominal) {
+      return toast.error("Pilih transaksi dan isi nominal.");
     }
 
     try {
@@ -64,21 +85,20 @@ function Page() {
     const t = transactions.find((x) => x.id === id || x.kode === id);
     return t ? `${t.kode} · ${getCustomer(t.customerId)?.nama}` : id || "-";
   };
-  const selectedTransaction = transactions.find(
-    (t) => t.id === form.transaksiId || t.kode === form.kodeRental,
-  );
+  const selectedTransaction = transactions.find((t) => t.id === form.transaksiId);
   const totalTagihan = selectedTransaction
-    ? selectedTransaction.total +
-      selectedTransaction.dendaKeterlambatan +
-      selectedTransaction.dendaKerusakan +
-      selectedTransaction.dendaKehilangan
+    ? Number(selectedTransaction.total || 0) +
+      Number(selectedTransaction.dendaKeterlambatan || 0) +
+      Number(selectedTransaction.dendaKerusakan || 0) +
+      Number(selectedTransaction.dendaKehilangan || 0)
     : 0;
   const totalSudahDibayar = Number(selectedTransaction?.terbayar || 0);
+  const totalBayarSetelahIni = totalSudahDibayar + form.nominal;
   const sisaRaw = totalTagihan - totalSudahDibayar - form.nominal;
   const statusAfter =
-    totalSudahDibayar + form.nominal <= 0
+    totalBayarSetelahIni <= 0
       ? "Belum Bayar"
-      : totalSudahDibayar + form.nominal < totalTagihan
+      : totalBayarSetelahIni < totalTagihan
         ? "Dibayar Sebagian"
         : "Lunas";
   const paymentHistory = selectedTransaction
@@ -116,7 +136,12 @@ function Page() {
         title="Pembayaran"
         description="Catat pembayaran rental: DP, tambah DP, dan pelunasan."
         actions={
-          <Button onClick={() => setOpen(true)}>
+          <Button
+            onClick={() => {
+              resetForm();
+              setOpen(true);
+            }}
+          >
             <Plus /> Catat Pembayaran
           </Button>
         }
@@ -153,35 +178,13 @@ function Page() {
 
       <ModalForm open={open} onOpenChange={setOpen} title="Catat Pembayaran" onSubmit={save}>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Kode Rental</Label>
-          <Input
-            value={form.kodeRental}
-            onChange={(e) => setForm({ ...form, kodeRental: e.target.value })}
-            placeholder="RT-260604-001"
-          />
-        </div>
-        <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Pilih Transaksi</Label>
-          <Select
+          <TransactionCombobox
+            transactions={transactions.filter((t) => t.status !== "Draft")}
             value={form.transaksiId}
-            onValueChange={(v) => {
-              const tx = transactions.find((t) => t.id === v);
-              setForm({ ...form, transaksiId: v, kodeRental: tx?.kode || form.kodeRental });
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih transaksi" />
-            </SelectTrigger>
-            <SelectContent>
-              {transactions
-                .filter((t) => t.status !== "Draft")
-                .map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.kode} · {getCustomer(t.customerId)?.nama}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+            getCustomerName={(transaction) => getCustomer(transaction.customerId)?.nama || "-"}
+            onChange={(value) => setForm({ ...form, transaksiId: value })}
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -221,7 +224,7 @@ function Page() {
               <SelectContent>
                 {METHODS.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {s}
+                    {s === "Tunai" ? "Cash" : s}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -237,8 +240,9 @@ function Page() {
         </div>
         <div className="space-y-2 rounded-xl bg-muted/50 p-4 text-sm">
           <Row label="Total Tagihan" value={formatRupiah(totalTagihan)} />
-          <Row label="Total Sudah Dibayar" value={formatRupiah(totalSudahDibayar)} />
+          <Row label="DP/Sudah Dibayar Sebelumnya" value={formatRupiah(totalSudahDibayar)} />
           <Row label="Nominal Bayar Sekarang" value={formatRupiah(form.nominal)} />
+          <Row label="Total Bayar Setelah Ini" value={formatRupiah(totalBayarSetelahIni)} />
           <Row label="Status Setelah Pembayaran" value={statusAfter} />
           <div className="my-1 border-t" />
           <Row
@@ -284,6 +288,77 @@ function Page() {
         </div>
       </ModalForm>
     </div>
+  );
+}
+
+function TransactionCombobox({
+  transactions,
+  value,
+  onChange,
+  getCustomerName,
+}: {
+  transactions: Transaction[];
+  value: string;
+  onChange: (value: string) => void;
+  getCustomerName: (transaction: Transaction) => string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selected = transactions.find((transaction) => transaction.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-10 w-full justify-between font-normal"
+        >
+          <span className="truncate">
+            {selected
+              ? `${selected.kode} · ${getCustomerName(selected)} (${formatRupiah(selected.total)})`
+              : "Pilih transaksi..."}
+          </span>
+          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Cari transaksi..." />
+          <CommandList>
+            <CommandEmpty>Transaksi tidak ditemukan.</CommandEmpty>
+            <CommandGroup>
+              {transactions.map((transaction) => {
+                const customer = getCustomerName(transaction);
+                const label = `${transaction.kode} ${customer} ${formatRupiah(transaction.total)}`;
+
+                return (
+                  <CommandItem
+                    key={transaction.id}
+                    value={label}
+                    onSelect={() => {
+                      onChange(transaction.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "size-4",
+                        value === transaction.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <span className="truncate">
+                      {transaction.kode} - {customer} ({formatRupiah(transaction.total)})
+                    </span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

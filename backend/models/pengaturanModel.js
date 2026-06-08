@@ -19,6 +19,43 @@ const pengaturanSchema = new mongoose.Schema(
       trim: true,
       default: "Jl. Operasional No. 1, Jakarta",
     },
+    tentang_rentory: {
+      type: String,
+      trim: true,
+      default:
+        "Rentory adalah platform rental barang yang membantu customer menyewa kebutuhan acara, perlengkapan, dan barang harian dengan proses yang mudah, transparan, dan terpercaya.",
+    },
+    bantuan_whatsapp: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    bantuan_faq: {
+      type: [
+        {
+          pertanyaan: {
+            type: String,
+            trim: true,
+            default: "",
+          },
+          jawaban: {
+            type: String,
+            trim: true,
+            default: "",
+          },
+        },
+      ],
+      default: [
+        {
+          pertanyaan: "Bagaimana cara membuat pesanan?",
+          jawaban: "Pilih barang dari katalog, masukkan ke keranjang, lalu checkout.",
+        },
+        {
+          pertanyaan: "Kapan jaminan dibayarkan?",
+          jawaban: "Jaminan dicatat admin saat serah terima keluar.",
+        },
+      ],
+    },
     app_name: {
       type: String,
       trim: true,

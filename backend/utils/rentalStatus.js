@@ -36,6 +36,13 @@ const validasiPerubahanStatus = (statusSekarang, statusTujuan) => {
   }
 
   if (ke === STATUS_BATAL) {
+    if (!["draft", "booking", "siap_keluar"].includes(dari)) {
+      return {
+        valid: false,
+        pesan: "Transaksi hanya bisa dibatalkan sebelum barang keluar",
+      };
+    }
+
     return {
       valid: true,
     };

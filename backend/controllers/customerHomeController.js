@@ -4,7 +4,9 @@ const Kategori = require("../models/kategoriModel");
 const Pengaturan = require("../models/pengaturanModel");
 const Rental = require("../models/rentalModel");
 const RentalDetail = require("../models/rentalDetailModel");
+const MetodePembayaran = require("../models/metodePembayaranModel");
 const asyncHandler = require("../utils/asyncHandler");
+const { recalculateStokBarang } = require("../utils/recalculateStokBarang");
 
 const absoluteUrl = (req, url) => {
   if (!url) return "";
@@ -338,6 +340,49 @@ const daftarCustomerOrders = asyncHandler(async (req, res) => {
   });
 });
 
+const batalkanCustomerOrder = asyncHandler(async (req, res) => {
+  const customer = await cariCustomerLogin(req);
+
+  if (!customer) {
+    res.status(404);
+    throw new Error("Customer login tidak ditemukan");
+  }
+
+  const rental = await Rental.findOne({
+    _id: req.params.id,
+    ...filterRentalCustomer(customer),
+  });
+
+  if (!rental) {
+    res.status(404);
+    throw new Error("Pesanan tidak ditemukan");
+  }
+
+  if (!["booking", "siap_keluar"].includes(rental.status)) {
+    res.status(400);
+    throw new Error("Pesanan hanya bisa dibatalkan sebelum barang keluar");
+  }
+
+  rental.status = "batal";
+  rental.catatan = [rental.catatan, req.body?.catatan || "Dibatalkan oleh customer"]
+    .filter(Boolean)
+    .join("\n");
+  await rental.save();
+
+  const details = await RentalDetail.find({ kode_rental: rental.kode_rental }).select("kode_barang");
+  await recalculateStokBarang(details.map((detail) => detail.kode_barang));
+
+  res.json({
+    success: true,
+    data: {
+      id: String(rental._id),
+      kode_rental: rental.kode_rental,
+      status_rental: statusRentalLabel(rental.status),
+      status_display: statusRentalDisplay(rental.status),
+    },
+  });
+});
+
 const ambilCustomerProfile = asyncHandler(async (req, res) => {
   const customer = await cariCustomerLogin(req);
 
@@ -420,24 +465,53 @@ const daftarCustomerAddresses = asyncHandler(async (req, res) => {
   });
 });
 
+const daftarCustomerPaymentMethods = asyncHandler(async (req, res) => {
+  const items = await MetodePembayaran.find({
+    status_aktif: true,
+    tampil_di_apk: true,
+  }).sort({ urutan_tampil: 1, nama_metode: 1 });
+
+  res.json({
+    success: true,
+    data: {
+      total: items.length,
+      items: items.map((item) => ({
+        id: String(item._id),
+        kode_metode: item.kode_metode,
+        nama_metode: item.nama_metode,
+        tipe_metode: item.tipe_metode,
+        nama_bank: item.nama_bank || "",
+        nomor_rekening: item.nomor_rekening || "",
+        nama_pemilik: item.nama_pemilik || "",
+        qr_image_url: absoluteUrl(req, item.qr_image),
+        instruksi_pembayaran: item.instruksi_pembayaran || "",
+      })),
+    },
+  });
+});
+
 const ambilCustomerHelp = asyncHandler(async (req, res) => {
   const pengaturan = await Pengaturan.findOne();
+  const faq =
+    Array.isArray(pengaturan?.bantuan_faq) && pengaturan.bantuan_faq.length > 0
+      ? pengaturan.bantuan_faq
+      : [
+          {
+            pertanyaan: "Bagaimana cara membuat pesanan?",
+            jawaban: "Pilih barang dari katalog, masukkan ke keranjang, lalu checkout.",
+          },
+          {
+            pertanyaan: "Kapan jaminan dibayarkan?",
+            jawaban: "Jaminan dicatat admin saat serah terima keluar.",
+          },
+        ];
 
   res.json({
     success: true,
     data: {
       title: "Bantuan",
-      whatsapp: pengaturan?.telepon || "",
-      faq: [
-        {
-          pertanyaan: "Bagaimana cara membuat pesanan?",
-          jawaban: "Pilih barang dari katalog, masukkan ke keranjang, lalu checkout.",
-        },
-        {
-          pertanyaan: "Kapan jaminan dibayarkan?",
-          jawaban: "Jaminan dicatat admin saat serah terima keluar.",
-        },
-      ],
+      whatsapp: pengaturan?.bantuan_whatsapp || pengaturan?.telepon || "",
+      faq,
     },
   });
 });
@@ -453,6 +527,7 @@ const ambilCustomerAbout = asyncHandler(async (req, res) => {
       versi: "1.0.0",
       alamat: pengaturan?.alamat || "",
       telepon: pengaturan?.telepon || "",
+      deskripsi: pengaturan?.tentang_rentory || "",
     },
   });
 });
@@ -462,9 +537,11 @@ module.exports = {
   daftarCustomerKategori,
   daftarCustomerBarang,
   daftarCustomerOrders,
+  batalkanCustomerOrder,
   ambilCustomerProfile,
   ubahCustomerProfile,
   daftarCustomerAddresses,
+  daftarCustomerPaymentMethods,
   ambilCustomerHelp,
   ambilCustomerAbout,
 };

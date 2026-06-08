@@ -8,14 +8,20 @@ import { colors, radius, shadow } from "@/theme";
 import type { CustomerProfile } from "@/data/types";
 import { useAuth } from "@/store/AuthContext";
 
-const menu: { icon: keyof typeof Ionicons.glyphMap; label: string; sub: string }[] = [
-  { icon: "person-outline", label: "Edit Profil", sub: "Ubah data diri" },
-  { icon: "location-outline", label: "Alamat Saya", sub: "Kelola alamat pengiriman" },
-  { icon: "card-outline", label: "Metode Pembayaran", sub: "Kartu & e-wallet" },
-  { icon: "heart-outline", label: "Favorit", sub: "Barang yang kamu suka" },
-  { icon: "notifications-outline", label: "Notifikasi", sub: "Atur pemberitahuan" },
-  { icon: "help-circle-outline", label: "Bantuan", sub: "FAQ & customer service" },
-  { icon: "information-circle-outline", label: "Tentang Rentory", sub: "Versi 1.0.0" },
+const menu: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+  route?: "/edit-profil" | "/alamat-saya" | "/metode-pembayaran" | "/favorit" | "/notifikasi" | "/bantuan" | "/tentang-rentory";
+  authRequired?: boolean;
+}[] = [
+  { icon: "person-outline", label: "Edit Profil", sub: "Ubah data diri", route: "/edit-profil" },
+  { icon: "location-outline", label: "Alamat Saya", sub: "Kelola alamat pengiriman", route: "/alamat-saya" },
+  { icon: "card-outline", label: "Metode Pembayaran", sub: "Kartu & e-wallet", route: "/metode-pembayaran" },
+  { icon: "heart-outline", label: "Favorit", sub: "Barang yang kamu suka", route: "/favorit" },
+  { icon: "notifications-outline", label: "Notifikasi", sub: "Atur pemberitahuan", route: "/notifikasi" },
+  { icon: "help-circle-outline", label: "Bantuan", sub: "FAQ & customer service", route: "/bantuan", authRequired: false },
+  { icon: "information-circle-outline", label: "Tentang Rentory", sub: "Versi 1.0.0", route: "/tentang-rentory", authRequired: false },
 ];
 
 export default function Profil() {
@@ -107,6 +113,14 @@ export default function Profil() {
         {menu.map((m) => (
           <Pressable
             key={m.label}
+            onPress={() => {
+              if (!m.route) return;
+              if (m.authRequired !== false && !isLoggedIn) {
+                router.push({ pathname: "/login", params: { redirect: "/profil" } });
+                return;
+              }
+              router.push(m.route);
+            }}
             style={{ flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.card, borderRadius: radius.md, padding: 14, ...shadow.soft }}
           >
             <View style={{ width: 42, height: 42, borderRadius: radius.sm, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>

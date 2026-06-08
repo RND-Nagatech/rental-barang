@@ -9,7 +9,7 @@ export type TransactionStatus =
   | "Sedang Disewa"
   | "Serah Terima Kembali"
   | "Selesai"
-  | "Dibatalkan";
+  | "Batal";
 
 export type PaymentStatus = "Belum Bayar" | "Dibayar Sebagian" | "Lunas";
 
@@ -159,9 +159,11 @@ export interface Transaction {
   dendaKerusakan: number;
   dendaKehilangan: number;
   charges?: RentalCharge[];
+  jenis_pembayaran?: PaymentType;
   metode_pembayaran?: PaymentMethod;
   nominal_bayar?: number;
   bukti_pembayaran?: string;
+  catatan_pembayaran?: string;
 }
 
 export interface Payment {

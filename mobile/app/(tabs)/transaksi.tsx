@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,7 +20,7 @@ const filters: { label: "Semua" | "Aktif" | "Selesai"; value: OrderFilter }[] = 
 export default function Transaksi() {
   const insets = useSafeAreaInsets();
   const { token, isLoggedIn, loading: authLoading } = useAuth();
-  const [filter, setFilter] = useState<OrderFilter>("all");
+  const [filter, setFilter] = useState<OrderFilter>("active");
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +43,33 @@ export default function Transaksi() {
       setLoading(false);
     }
   }, [filter, token]);
+
+  const cancelOrder = useCallback(
+    (order: CustomerOrder) => {
+      if (!token) return;
+
+      Alert.alert(
+        "Batalkan pesanan?",
+        `Pesanan ${order.kode_rental} akan dibatalkan dan stok booking dilepas.`,
+        [
+          { text: "Tidak", style: "cancel" },
+          {
+            text: "Batalkan",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await mobileApi.cancelCustomerOrder(order.id, token);
+                await loadOrders();
+              } catch (err) {
+                Alert.alert("Gagal membatalkan", err instanceof Error ? err.message : "Coba lagi beberapa saat.");
+              }
+            },
+          },
+        ],
+      );
+    },
+    [loadOrders, token],
+  );
 
   useEffect(() => {
     loadOrders();
@@ -106,14 +133,16 @@ export default function Transaksi() {
             <Button label="Mulai Sewa" onPress={() => router.push("/katalog")} style={{ marginTop: 6 }} />
           </View>
         ) : (
-          orders.map((order) => <OrderCard key={order.id} order={order} />)
+          orders.map((order) => <OrderCard key={order.id} order={order} onCancel={cancelOrder} />)
         )}
       </ScrollView>
     </View>
   );
 }
 
-function OrderCard({ order }: { order: CustomerOrder }) {
+function OrderCard({ order, onCancel }: { order: CustomerOrder; onCancel: (order: CustomerOrder) => void }) {
+  const canCancel = order.status_rental === "Booking" || order.status_rental === "Siap Keluar";
+
   return (
     <View style={{ backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, marginBottom: 14, ...shadow.soft }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -180,16 +209,26 @@ function OrderCard({ order }: { order: CustomerOrder }) {
         </View>
       </View>
 
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, gap: 10 }}>
         <PayStatusBadge status={order.status_pembayaran} />
-        {order.sisa_tagihan > 0 && (
-          <Pressable
-            onPress={() => router.push(`/pembayaran/${order.id}`)}
-            style={{ backgroundColor: colors.primary, paddingHorizontal: 16, height: 38, borderRadius: radius.full, justifyContent: "center" }}
-          >
-            <Text style={{ color: colors.white, fontWeight: "800", fontSize: 13 }}>Bayar {formatRupiah(order.sisa_tagihan)}</Text>
-          </Pressable>
-        )}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+          {canCancel && (
+            <Pressable
+              onPress={() => onCancel(order)}
+              style={{ backgroundColor: colors.dangerSoft, paddingHorizontal: 14, height: 38, borderRadius: radius.full, justifyContent: "center" }}
+            >
+              <Text style={{ color: colors.danger, fontWeight: "800", fontSize: 13 }}>Batal</Text>
+            </Pressable>
+          )}
+          {order.sisa_tagihan > 0 && order.status_display !== "Batal" && (
+            <Pressable
+              onPress={() => router.push(`/pembayaran/${order.id}`)}
+              style={{ backgroundColor: colors.primary, paddingHorizontal: 16, height: 38, borderRadius: radius.full, justifyContent: "center" }}
+            >
+              <Text style={{ color: colors.white, fontWeight: "800", fontSize: 13 }}>Bayar {formatRupiah(order.sisa_tagihan)}</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     </View>
   );

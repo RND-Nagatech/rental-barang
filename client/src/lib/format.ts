@@ -60,7 +60,7 @@ export function parseDateOnly(value: string): Date {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
 }
 
-/** Whole days between two dates (b - a). Minimum 1 for rental day counting. */
+/** Whole days between two dates (b - a). */
 export function daysBetween(a: string | Date, b: string | Date): number {
   const da = typeof a === "string" ? parseDateOnly(a) : a;
   const db = typeof b === "string" ? parseDateOnly(b) : b;
@@ -71,5 +71,5 @@ export function daysBetween(a: string | Date, b: string | Date): number {
 }
 
 export function rentalDays(start: string | Date, end: string | Date): number {
-  return Math.max(1, daysBetween(start, end));
+  return Math.max(1, daysBetween(start, end) + 1);
 }

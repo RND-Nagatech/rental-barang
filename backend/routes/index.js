@@ -3,6 +3,7 @@ const authRoutes = require("./authRoutes");
 const adminUserRoutes = require("./adminUserRoutes");
 const kategoriRoutes = require("./kategoriRoutes");
 const barangRoutes = require("./barangRoutes");
+const metodePembayaranRoutes = require("./metodePembayaranRoutes");
 const customerRoutes = require("./customerRoutes");
 const rentalRoutes = require("./rentalRoutes");
 const pembayaranRoutes = require("./pembayaranRoutes");
@@ -19,6 +20,8 @@ const {
   daftarCustomerAddresses,
   daftarCustomerKategori,
   daftarCustomerOrders,
+  daftarCustomerPaymentMethods,
+  batalkanCustomerOrder,
   ubahCustomerProfile,
 } = require("../controllers/customerHomeController");
 const { requireCustomerAuth } = require("../middleware/authMiddleware");
@@ -45,6 +48,7 @@ router.get("/", (req, res) => {
       customer_about: "/api/customer/about",
       rental: "/api/rental",
       pembayaran: "/api/pembayaran",
+      metode_pembayaran: "/api/metode-pembayaran",
       pengaturan: "/api/pengaturan",
       upload: "/api/upload",
       laporan_export: "/api/laporan/export",
@@ -54,14 +58,17 @@ router.get("/", (req, res) => {
 
 router.use("/kategori", kategoriRoutes);
 router.use("/barang", barangRoutes);
+router.use("/metode-pembayaran", metodePembayaranRoutes);
 router.use("/auth", authRoutes);
 router.use("/admin", adminUserRoutes);
 router.get("/customer/home", ambilCustomerHome);
 router.get("/customer/kategori", daftarCustomerKategori);
 router.get("/customer/barang", daftarCustomerBarang);
+router.get("/customer/payment-methods", daftarCustomerPaymentMethods);
 router.post("/customer/auth/register", registerCustomer);
 router.post("/customer/auth/login", loginCustomer);
 router.get("/customer/orders", requireCustomerAuth, daftarCustomerOrders);
+router.patch("/customer/orders/:id/cancel", requireCustomerAuth, batalkanCustomerOrder);
 router
   .route("/customer/profile")
   .get(requireCustomerAuth, ambilCustomerProfile)

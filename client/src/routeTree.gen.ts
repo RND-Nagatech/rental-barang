@@ -16,6 +16,7 @@ import { Route as SerahTerimaKeluarRouteImport } from './routes/serah-terima-kel
 import { Route as SedangDisewaRouteImport } from './routes/sedang-disewa'
 import { Route as PengaturanRouteImport } from './routes/pengaturan'
 import { Route as PembayaranRouteImport } from './routes/pembayaran'
+import { Route as MetodePembayaranRouteImport } from './routes/metode-pembayaran'
 import { Route as ManageUserRouteImport } from './routes/manage-user'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LaporanRouteImport } from './routes/laporan'
@@ -58,6 +59,11 @@ const PengaturanRoute = PengaturanRouteImport.update({
 const PembayaranRoute = PembayaranRouteImport.update({
   id: '/pembayaran',
   path: '/pembayaran',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetodePembayaranRoute = MetodePembayaranRouteImport.update({
+  id: '/metode-pembayaran',
+  path: '/metode-pembayaran',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ManageUserRoute = ManageUserRouteImport.update({
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/laporan': typeof LaporanRoute
   '/login': typeof LoginRoute
   '/manage-user': typeof ManageUserRoute
+  '/metode-pembayaran': typeof MetodePembayaranRoute
   '/pembayaran': typeof PembayaranRoute
   '/pengaturan': typeof PengaturanRoute
   '/sedang-disewa': typeof SedangDisewaRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/laporan': typeof LaporanRoute
   '/login': typeof LoginRoute
   '/manage-user': typeof ManageUserRoute
+  '/metode-pembayaran': typeof MetodePembayaranRoute
   '/pembayaran': typeof PembayaranRoute
   '/pengaturan': typeof PengaturanRoute
   '/sedang-disewa': typeof SedangDisewaRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/laporan': typeof LaporanRoute
   '/login': typeof LoginRoute
   '/manage-user': typeof ManageUserRoute
+  '/metode-pembayaran': typeof MetodePembayaranRoute
   '/pembayaran': typeof PembayaranRoute
   '/pengaturan': typeof PengaturanRoute
   '/sedang-disewa': typeof SedangDisewaRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/laporan'
     | '/login'
     | '/manage-user'
+    | '/metode-pembayaran'
     | '/pembayaran'
     | '/pengaturan'
     | '/sedang-disewa'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/laporan'
     | '/login'
     | '/manage-user'
+    | '/metode-pembayaran'
     | '/pembayaran'
     | '/pengaturan'
     | '/sedang-disewa'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/laporan'
     | '/login'
     | '/manage-user'
+    | '/metode-pembayaran'
     | '/pembayaran'
     | '/pengaturan'
     | '/sedang-disewa'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   LaporanRoute: typeof LaporanRoute
   LoginRoute: typeof LoginRoute
   ManageUserRoute: typeof ManageUserRoute
+  MetodePembayaranRoute: typeof MetodePembayaranRoute
   PembayaranRoute: typeof PembayaranRoute
   PengaturanRoute: typeof PengaturanRoute
   SedangDisewaRoute: typeof SedangDisewaRoute
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       path: '/pembayaran'
       fullPath: '/pembayaran'
       preLoaderRoute: typeof PembayaranRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/metode-pembayaran': {
+      id: '/metode-pembayaran'
+      path: '/metode-pembayaran'
+      fullPath: '/metode-pembayaran'
+      preLoaderRoute: typeof MetodePembayaranRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/manage-user': {
@@ -344,6 +364,7 @@ const rootRouteChildren: RootRouteChildren = {
   LaporanRoute: LaporanRoute,
   LoginRoute: LoginRoute,
   ManageUserRoute: ManageUserRoute,
+  MetodePembayaranRoute: MetodePembayaranRoute,
   PembayaranRoute: PembayaranRoute,
   PengaturanRoute: PengaturanRoute,
   SedangDisewaRoute: SedangDisewaRoute,

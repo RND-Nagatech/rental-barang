@@ -161,6 +161,47 @@ type ApiCustomerProfileResponse = {
   data: CustomerProfile;
 };
 
+type ApiCustomerHelpResponse = {
+  success: boolean;
+  data: {
+    title: string;
+    whatsapp: string;
+    faq: { pertanyaan: string; jawaban: string }[];
+  };
+};
+
+type ApiCustomerAboutResponse = {
+  success: boolean;
+  data: {
+    app_name: string;
+    nama_usaha: string;
+    versi: string;
+    alamat: string;
+    telepon: string;
+    deskripsi: string;
+  };
+};
+
+export type CustomerPaymentMethod = {
+  id: string;
+  kode_metode: string;
+  nama_metode: string;
+  tipe_metode: "bank_transfer" | "qris" | "e_wallet" | "cash";
+  nama_bank: string;
+  nomor_rekening: string;
+  nama_pemilik: string;
+  qr_image_url: string;
+  instruksi_pembayaran: string;
+};
+
+type ApiCustomerPaymentMethodsResponse = {
+  success: boolean;
+  data: {
+    total: number;
+    items: CustomerPaymentMethod[];
+  };
+};
+
 type ApiCustomerAuthResponse = {
   success: boolean;
   token: string;
@@ -387,6 +428,17 @@ export const mobileApi = {
     };
   },
 
+  async cancelCustomerOrder(id: string, token?: string) {
+    return request<{ success: boolean; data: { id: string; kode_rental: string; status_rental: string; status_display: string } }>(
+      `/customer/orders/${id}/cancel`,
+      {
+        method: "PATCH",
+        headers: authHeader(token),
+        body: JSON.stringify({ catatan: "Dibatalkan oleh customer" }),
+      },
+    );
+  },
+
   async getCustomerProfile(token?: string): Promise<CustomerProfile> {
     const response = await request<ApiCustomerProfileResponse>("/customer/profile", {
       headers: authHeader(token),
@@ -410,11 +462,15 @@ export const mobileApi = {
   },
 
   async getCustomerHelp() {
-    return request("/customer/help");
+    return request<ApiCustomerHelpResponse>("/customer/help");
   },
 
   async getCustomerAbout() {
-    return request("/customer/about");
+    return request<ApiCustomerAboutResponse>("/customer/about");
+  },
+
+  async getCustomerPaymentMethods() {
+    return request<ApiCustomerPaymentMethodsResponse>("/customer/payment-methods");
   },
 
   async getCategories(): Promise<Category[]> {

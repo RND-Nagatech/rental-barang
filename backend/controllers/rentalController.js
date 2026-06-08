@@ -159,7 +159,7 @@ const hitungJumlahHari = (tanggalMulai, tanggalKembali) => {
   const mulai = new Date(tahunMulai, bulanMulai - 1, hariMulai);
   const kembali = new Date(tahunKembali, bulanKembali - 1, hariKembali);
   const selisih = kembali.getTime() - mulai.getTime();
-  const hari = Math.ceil(selisih / (1000 * 60 * 60 * 24));
+  const hari = Math.ceil(selisih / (1000 * 60 * 60 * 24)) + 1;
   return Math.max(1, hari || 1);
 };
 

@@ -152,6 +152,22 @@ type ApiPayment = MongoDoc & {
   catatan?: string | null;
 };
 
+export type ApiMetodePembayaran = MongoDoc & {
+  kode_metode: string;
+  nama_metode: string;
+  tipe_metode: "bank_transfer" | "qris" | "e_wallet" | "cash";
+  nama_bank?: string;
+  nomor_rekening?: string;
+  nama_pemilik?: string;
+  qr_image?: string;
+  instruksi_pembayaran?: string;
+  tampil_di_apk?: boolean;
+  status_aktif?: boolean;
+  urutan_tampil?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
 type ApiUpload = {
   nama_file: string;
   nama_asli: string;
@@ -182,6 +198,9 @@ export type Pengaturan = {
   nama_usaha: string;
   telepon: string;
   alamat: string;
+  tentang_rentory: string;
+  bantuan_whatsapp: string;
+  bantuan_faq: { pertanyaan: string; jawaban: string }[];
   app_name: string;
   home_headline: string;
   home_subheadline?: string;
@@ -341,17 +360,17 @@ const statusTransaksi = (status?: string): TransactionStatus => {
     booking: "Booking",
     siap_keluar: "Siap Keluar",
     sedang_disewa: "Sedang Disewa",
-    serah_terima_kembali: "Serah Terima Kembali",
+    serah_terima_kembali: "Selesai",
     selesai: "Selesai",
-    batal: "Dibatalkan",
-    dibatalkan: "Dibatalkan",
+    batal: "Batal",
+    dibatalkan: "Batal",
   };
 
-  return map[status || ""] || "Draft";
+  return map[status || ""] || "Booking";
 };
 
 const statusApi = (status: TransactionStatus) =>
-  status === "Dibatalkan" ? "batal" : status.toLowerCase().replace(/\s+/g, "_");
+  status === "Batal" ? "batal" : status.toLowerCase().replace(/\s+/g, "_");
 
 const tipeBayar = (tipe?: string): PaymentType => {
   const map: Record<string, PaymentType> = {
@@ -790,8 +809,10 @@ export const rentalApi = {
           diskon: transaction.diskon,
           total_bayar: transaction.nominal_bayar ?? transaction.terbayar,
           nominal_bayar: transaction.nominal_bayar ?? transaction.terbayar,
+          jenis_pembayaran: transaction.jenis_pembayaran,
           metode_pembayaran: transaction.metode_pembayaran,
           bukti_pembayaran: transaction.bukti_pembayaran,
+          catatan_pembayaran: transaction.catatan_pembayaran,
           catatan: transaction.catatan,
           detail: transaction.items.map((line) => {
             const item = items.find((barang) => barang.id === line.itemId);
@@ -921,6 +942,24 @@ export const pembayaranApi = {
       })
     ).data;
   },
+};
+
+export const metodePembayaranApi = {
+  list: async () => (await request<ApiList<ApiMetodePembayaran>>("/metode-pembayaran")).data,
+  create: async (input: Partial<ApiMetodePembayaran>) =>
+    (await request<ApiSingle<ApiMetodePembayaran>>("/metode-pembayaran", {
+      method: "POST",
+      body: JSON.stringify(input),
+    })).data,
+  update: async (id: string, input: Partial<ApiMetodePembayaran>) =>
+    (await request<ApiSingle<ApiMetodePembayaran>>(`/metode-pembayaran/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    })).data,
+  remove: async (id: string) =>
+    (await request<ApiSingle<ApiMetodePembayaran>>(`/metode-pembayaran/${id}`, {
+      method: "DELETE",
+    })).data,
 };
 
 export const uploadApi = {

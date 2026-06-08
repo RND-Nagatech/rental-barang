@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Eye, Trash2, Wallet } from "lucide-react";
+import { Ban, Plus, Eye, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/store/AppStore";
 import type {
@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatRupiah, formatDate, toISODate, rentalDays } from "@/lib/format";
-import { txTotal, txSubtotal, txDays } from "@/lib/rental";
+import { txDays } from "@/lib/rental";
 
 export const Route = createFileRoute("/transaksi")({
   head: () => ({ meta: [{ title: "Transaksi Rental — Rentory" }] }),
@@ -37,26 +37,28 @@ export const Route = createFileRoute("/transaksi")({
 });
 
 const STATUS_FLOW = [
-  "Draft",
   "Booking",
   "Siap Keluar",
   "Sedang Disewa",
-  "Serah Terima Kembali",
   "Selesai",
-];
+  "Batal",
+] satisfies Transaction["status"][];
+const STATUS_FILTERS = ["Booking", "Siap Keluar", "Sedang Disewa", "Selesai", "Batal"] satisfies Transaction["status"][];
+const PAYMENT_TYPES: PaymentType[] = ["DP", "Tambah DP", "Pelunasan", "Denda", "Charge", "Refund Jaminan"];
+const PAYMENT_METHODS: PaymentMethod[] = ["Tunai", "Transfer", "QRIS", "Kartu"];
+const canCancel = (transaction: Transaction) =>
+  transaction.status === "Booking" || transaction.status === "Siap Keluar";
 
 function TransaksiPage() {
   const {
     transactions,
-    payments,
     customers,
     items,
     getCustomer,
     addTransaction,
-    updateTransaction,
-    addPayment,
+    setTransactionStatus,
   } = useStore();
-  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState("active");
   const [open, setOpen] = React.useState(false);
   const [detail, setDetail] = React.useState<Transaction | null>(null);
 
@@ -67,23 +69,29 @@ function TransaksiPage() {
   const [lines, setLines] = React.useState<TransactionLine[]>([]);
   const [diskon, setDiskon] = React.useState(0);
   const [catatan, setCatatan] = React.useState("");
-  const [metodePembayaran, setMetodePembayaran] = React.useState<PaymentMethod>("Transfer");
+  const [tipePembayaran, setTipePembayaran] = React.useState<PaymentType>("DP");
+  const [metodePembayaran, setMetodePembayaran] = React.useState<PaymentMethod>("Tunai");
   const [nominalBayar, setNominalBayar] = React.useState(0);
   const [buktiPembayaran, setBuktiPembayaran] = React.useState("");
-  const [paymentOpen, setPaymentOpen] = React.useState(false);
-  const [paymentTarget, setPaymentTarget] = React.useState<Transaction | null>(null);
-  const [paymentForm, setPaymentForm] = React.useState({
-    tipe: "DP" as PaymentType,
-    metode: "Transfer" as PaymentMethod,
-    nominal: 0,
-    bukti: "",
-    catatan: "",
-  });
+  const [catatanPembayaran, setCatatanPembayaran] = React.useState("");
 
-  const filtered = transactions.filter((t) => statusFilter === "all" || t.status === statusFilter);
+  const filtered = transactions.filter((t) => {
+    if (statusFilter === "active") return !["Selesai", "Batal"].includes(t.status);
+    if (statusFilter === "all") return true;
+    return t.status === statusFilter;
+  });
   const days = rentalDays(mulai, kembali);
   const subtotal = lines.reduce((s, l) => s + l.qty * l.harga_sewa * days, 0);
   const total = Math.max(0, subtotal - diskon);
+  const totalBayarSaatBooking = Math.max(0, nominalBayar);
+  const sisaSetelahPembayaran = Math.max(0, total - totalBayarSaatBooking);
+  const lebihBayar = Math.max(0, totalBayarSaatBooking - total);
+  const statusPembayaranSaatBooking =
+    totalBayarSaatBooking <= 0
+      ? "Belum Bayar"
+      : totalBayarSaatBooking < total
+        ? "Dibayar Sebagian"
+        : "Lunas";
 
   function resetForm() {
     setCustomerId("");
@@ -92,9 +100,11 @@ function TransaksiPage() {
     setLines([]);
     setDiskon(0);
     setCatatan("");
-    setMetodePembayaran("Transfer");
+    setTipePembayaran("DP");
+    setMetodePembayaran("Tunai");
     setNominalBayar(0);
     setBuktiPembayaran("");
+    setCatatanPembayaran("");
   }
 
   function addLine(itemId: string) {
@@ -147,52 +157,40 @@ function TransaksiPage() {
       total,
       catatan,
       status: "Booking",
-      paymentStatus:
-        nominalBayar <= 0 ? "Belum Bayar" : nominalBayar < total ? "Dibayar Sebagian" : "Lunas",
-      terbayar: nominalBayar,
+      paymentStatus: statusPembayaranSaatBooking,
+      terbayar: totalBayarSaatBooking,
       dendaKeterlambatan: 0,
       dendaKerusakan: 0,
       dendaKehilangan: 0,
+      jenis_pembayaran: tipePembayaran,
       metode_pembayaran: metodePembayaran,
-      nominal_bayar: nominalBayar,
+      nominal_bayar: totalBayarSaatBooking,
       bukti_pembayaran: buktiPembayaran,
+      catatan_pembayaran: catatanPembayaran,
     });
-    toast.success("Transaksi dibuat dengan status Booking.");
+    toast.success(
+      totalBayarSaatBooking > 0
+        ? `Transaksi dibuat dan pembayaran ${tipePembayaran} dicatat.`
+        : "Transaksi dibuat dengan status Booking.",
+    );
     setOpen(false);
     resetForm();
   }
 
-  function openPayment(t: Transaction) {
-    setPaymentTarget(t);
-    setPaymentForm({
-      tipe: "DP",
-      metode: "Transfer",
-      nominal: Math.max(0, Math.round(txTotal(t) * 0.4)),
-      bukti: "",
-      catatan: "DP transaksi",
-    });
-    setPaymentOpen(true);
-  }
+  async function cancelTransaction(transaction: Transaction) {
+    if (!canCancel(transaction)) {
+      toast.error("Transaksi hanya bisa dibatalkan sebelum barang keluar.");
+      return;
+    }
 
-  async function savePayment() {
-    if (!paymentTarget) return;
-    if (paymentForm.nominal <= 0) return toast.error("Nominal pembayaran wajib diisi.");
+    if (!window.confirm(`Batalkan transaksi ${transaction.kode}?`)) return;
 
     try {
-      await addPayment({
-        transaksiId: paymentTarget.id,
-        tanggal: today,
-        tipe: paymentForm.tipe,
-        metode: paymentForm.metode,
-        nominal: paymentForm.nominal,
-        bukti: paymentForm.bukti || "-",
-        catatan: paymentForm.catatan,
-      });
-      toast.success("Pembayaran dicatat.");
-      setPaymentOpen(false);
+      await setTransactionStatus(transaction.id, "Batal");
+      toast.success("Transaksi dibatalkan.");
       setDetail(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal mencatat pembayaran.");
+      toast.error(error instanceof Error ? error.message : "Gagal membatalkan transaksi.");
     }
   }
 
@@ -211,7 +209,7 @@ function TransaksiPage() {
     {
       key: "total",
       header: "Total",
-      render: (t) => <span className="font-semibold">{formatRupiah(txTotal(t))}</span>,
+      render: (t) => <span className="font-semibold">{formatRupiah(t.total)}</span>,
     },
     { key: "bayar", header: "Bayar", render: (t) => <StatusBadge status={t.paymentStatus} /> },
     { key: "status", header: "Status", render: (t) => <StatusBadge status={t.status} /> },
@@ -220,30 +218,24 @@ function TransaksiPage() {
       header: "",
       className: "text-right",
       render: (t) => (
-        <Button variant="ghost" size="icon" onClick={() => setDetail(t)}>
-          <Eye />
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="icon" onClick={() => setDetail(t)}>
+            <Eye />
+          </Button>
+          {canCancel(t) && (
+            <Button variant="ghost" size="icon" onClick={() => cancelTransaction(t)}>
+              <Ban className="text-destructive" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
-  const paymentTotalTagihan = paymentTarget ? txTotal(paymentTarget) : 0;
-  const paymentSudahDibayar = Number(paymentTarget?.terbayar || 0);
-  const paymentSisaRaw = paymentTotalTagihan - paymentSudahDibayar - paymentForm.nominal;
-  const paymentStatusAfter =
-    paymentSudahDibayar + paymentForm.nominal <= 0
-      ? "Belum Bayar"
-      : paymentSudahDibayar + paymentForm.nominal < paymentTotalTagihan
-        ? "Dibayar Sebagian"
-        : "Lunas";
-  const paymentHistory = paymentTarget
-    ? payments.filter((payment) => payment.transaksiId === paymentTarget.id)
-    : [];
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Transaksi Rental"
-        description="Kelola transaksi rental dari Draft hingga Selesai."
+        description="Kelola booking, serah terima keluar, pengembalian, dan pembatalan transaksi."
         actions={
           <Button
             onClick={() => {
@@ -260,7 +252,8 @@ function TransaksiPage() {
         {STATUS_FLOW.map((s, i) => (
           <React.Fragment key={s}>
             <StatusBadge status={s} />
-            {i < STATUS_FLOW.length - 1 && <span className="text-muted-foreground">→</span>}
+            {i < STATUS_FLOW.length - 2 && <span className="text-muted-foreground">→</span>}
+            {i === STATUS_FLOW.length - 2 && <span className="text-muted-foreground">atau</span>}
           </React.Fragment>
         ))}
       </div>
@@ -277,8 +270,9 @@ function TransaksiPage() {
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="active">Aktif</SelectItem>
               <SelectItem value="all">Semua Status</SelectItem>
-              {[...STATUS_FLOW, "Dibatalkan"].map((s) => (
+              {STATUS_FILTERS.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>
@@ -400,35 +394,81 @@ function TransaksiPage() {
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
-            <Select
-              value={metodePembayaran}
-              onValueChange={(value) => setMetodePembayaran(value as PaymentMethod)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["Tunai", "Transfer", "QRIS", "Kartu"].map((metode) => (
-                  <SelectItem key={metode} value={metode}>
-                    {metode}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-4 rounded-xl border bg-card p-4">
+          <div>
+            <h4 className="font-display text-sm font-semibold">Pembayaran Saat Booking</h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Opsional. Bisa dikosongkan jika pembayaran dicatat nanti dari menu Pembayaran.
+            </p>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Nominal Bayar</Label>
-            <CurrencyInput value={nominalBayar} onChange={setNominalBayar} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Jenis Pembayaran</Label>
+              <Select
+                value={tipePembayaran}
+                onValueChange={(value) => setTipePembayaran(value as PaymentType)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TYPES.map((tipe) => (
+                    <SelectItem key={tipe} value={tipe}>
+                      {tipe}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
+              <Select
+                value={metodePembayaran}
+                onValueChange={(value) => setMetodePembayaran(value as PaymentMethod)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((metode) => (
+                    <SelectItem key={metode} value={metode}>
+                      {metode === "Tunai" ? "Cash" : metode}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nominal Bayar Sekarang</Label>
+              <CurrencyInput value={nominalBayar} onChange={setNominalBayar} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Catatan Pembayaran</Label>
+              <Input
+                value={catatanPembayaran}
+                onChange={(event) => setCatatanPembayaran(event.target.value)}
+                placeholder="Contoh: DP saat booking"
+              />
+            </div>
+          </div>
+          <ImageUploader
+            label="Upload bukti pembayaran"
+            value={buktiPembayaran}
+            onChange={(value) => setBuktiPembayaran(String(value))}
+          />
+          <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
+            <SummaryRow label="Total Tagihan" value={formatRupiah(total)} />
+            <SummaryRow label="Total Sudah Dibayar" value={formatRupiah(0)} />
+            <SummaryRow label="Nominal Bayar Sekarang" value={formatRupiah(totalBayarSaatBooking)} />
+            <SummaryRow label="Status Setelah Pembayaran" value={statusPembayaranSaatBooking} />
+            <div className="my-1 border-t" />
+            <SummaryRow
+              label={lebihBayar > 0 ? "Lebih Bayar" : "Sisa Setelah Pembayaran"}
+              value={formatRupiah(lebihBayar > 0 ? lebihBayar : sisaSetelahPembayaran)}
+              bold
+            />
           </div>
         </div>
-        <ImageUploader
-          label="Upload bukti pembayaran"
-          value={buktiPembayaran}
-          onChange={(value) => setBuktiPembayaran(String(value))}
-        />
 
         <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
           <SummaryRow label={`Subtotal (${days} hari)`} value={formatRupiah(subtotal)} />
@@ -445,9 +485,9 @@ function TransaksiPage() {
         title={detail?.kode ?? ""}
         description={detail ? getCustomer(detail.customerId)?.nama : ""}
         footer={
-          detail?.paymentStatus !== "Lunas" ? (
-            <Button className="w-full" onClick={() => openPayment(detail)}>
-              <Wallet /> Bayar DP / Pelunasan
+          detail && canCancel(detail) ? (
+            <Button variant="destructive" className="w-full" onClick={() => cancelTransaction(detail)}>
+              <Ban /> Batalkan Transaksi
             </Button>
           ) : undefined
         }
@@ -486,10 +526,10 @@ function TransaksiPage() {
               </div>
             </div>
             <div className="space-y-1.5 rounded-xl bg-muted/50 p-4 text-sm">
-              <SummaryRow label="Subtotal" value={formatRupiah(txSubtotal(detail))} />
+              <SummaryRow label="Subtotal" value={formatRupiah(detail.total + detail.diskon)} />
               <SummaryRow label="Diskon" value={`- ${formatRupiah(detail.diskon)}`} />
               <div className="my-1 border-t" />
-              <SummaryRow label="Total" value={formatRupiah(txTotal(detail))} bold />
+              <SummaryRow label="Total" value={formatRupiah(detail.total)} bold />
               <SummaryRow label="Terbayar" value={formatRupiah(detail.terbayar)} muted />
             </div>
             {detail.catatan && (
@@ -500,106 +540,6 @@ function TransaksiPage() {
           </div>
         )}
       </DetailDrawer>
-
-      <ModalForm
-        open={paymentOpen}
-        onOpenChange={setPaymentOpen}
-        title={`Pembayaran ${paymentTarget?.kode ?? ""}`}
-        onSubmit={savePayment}
-        submitLabel="Simpan Pembayaran"
-      >
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Jenis Pembayaran</Label>
-          <Select
-            value={paymentForm.tipe}
-            onValueChange={(value) =>
-              setPaymentForm({ ...paymentForm, tipe: value as PaymentType })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["DP", "Tambah DP", "Pelunasan", "Denda", "Charge", "Refund Jaminan"].map((tipe) => (
-                <SelectItem key={tipe} value={tipe}>
-                  {tipe}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
-          <Select
-            value={paymentForm.metode}
-            onValueChange={(value) =>
-              setPaymentForm({ ...paymentForm, metode: value as PaymentMethod })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["Tunai", "Transfer", "QRIS", "Kartu"].map((metode) => (
-                <SelectItem key={metode} value={metode}>
-                  {metode}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Nominal Bayar</Label>
-          <CurrencyInput
-            value={paymentForm.nominal}
-            onChange={(value) => setPaymentForm({ ...paymentForm, nominal: value })}
-          />
-        </div>
-        <div className="space-y-2 rounded-xl bg-muted/50 p-4 text-sm">
-          <SummaryRow label="Total Tagihan" value={formatRupiah(paymentTotalTagihan)} />
-          <SummaryRow label="Total Sudah Dibayar" value={formatRupiah(paymentSudahDibayar)} />
-          <SummaryRow label="Nominal Bayar Sekarang" value={formatRupiah(paymentForm.nominal)} />
-          <SummaryRow label="Status Setelah Pembayaran" value={paymentStatusAfter} />
-          <div className="my-1 border-t" />
-          <SummaryRow
-            label={paymentSisaRaw < 0 ? "Lebih Bayar" : "Sisa Setelah Pembayaran"}
-            value={formatRupiah(Math.abs(Math.min(paymentSisaRaw, 0)) || Math.max(0, paymentSisaRaw))}
-            bold
-          />
-        </div>
-        <ImageUploader
-          label="Upload bukti pembayaran"
-          value={paymentForm.bukti}
-          onChange={(value) => setPaymentForm({ ...paymentForm, bukti: String(value) })}
-        />
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Catatan</Label>
-          <Textarea
-            value={paymentForm.catatan}
-            onChange={(e) => setPaymentForm({ ...paymentForm, catatan: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Riwayat Pembayaran</Label>
-          {paymentHistory.length === 0 ? (
-            <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-              Belum ada riwayat pembayaran.
-            </p>
-          ) : (
-            <div className="overflow-hidden rounded-lg border text-sm">
-              {paymentHistory.map((payment) => (
-                <div key={payment.id} className="grid grid-cols-5 gap-2 border-b p-2 last:border-b-0">
-                  <span>{formatDate(payment.tanggal)}</span>
-                  <span>{payment.tipe}</span>
-                  <span>{payment.metode}</span>
-                  <span className="text-right font-medium">{formatRupiah(payment.nominal)}</span>
-                  <span className="text-right text-muted-foreground">Tercatat</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </ModalForm>
     </div>
   );
 }

@@ -10,7 +10,16 @@ import type { Item } from "@/data/types";
 export function ItemCard({ item, width }: { item: Item; width?: DimensionValue }) {
   return (
     <Pressable
-      onPress={() => router.push(`/barang/${item.id}`)}
+      onPress={() =>
+        router.push({
+          pathname: "/barang/[id]",
+          params: {
+            id: item.id,
+            imageUrl: item.imageUrl || "",
+            emoji: item.emoji || "",
+          },
+        })
+      }
       style={({ pressed }) => [
         {
           width,

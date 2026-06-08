@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -10,11 +10,13 @@ import { ItemStatusBadge } from "@/components/Badge";
 import { Button, IconButton, Stepper } from "@/components/Button";
 import { Card, Row } from "@/components/Card";
 import { useCart } from "@/store/CartContext";
+import { useCustomerPrefs } from "@/store/CustomerPrefsContext";
 
 export default function BarangDetail() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, imageUrl, emoji } = useLocalSearchParams<{ id: string; imageUrl?: string; emoji?: string }>();
   const { addToCart, cartDays, getCategory, getItem } = useCart();
+  const { isFavorite, toggleFavorite } = useCustomerPrefs();
   const item = getItem(id ?? "");
   const [qty, setQty] = useState(1);
 
@@ -28,6 +30,9 @@ export default function BarangDetail() {
 
   const cat = getCategory(item.kategoriId);
   const soldOut = item.status === "Habis";
+  const favorite = isFavorite(item.id);
+  const displayImage = item.imageUrl || imageUrl || "";
+  const displayEmoji = item.emoji || emoji || "📦";
 
   function handleAdd() {
     addToCart(item!, qty);
@@ -42,12 +47,20 @@ export default function BarangDetail() {
             <IconButton onPress={() => router.back()} bg={colors.card}>
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </IconButton>
-            <IconButton bg={colors.card}>
-              <Ionicons name="heart-outline" size={20} color={colors.text} />
+            <IconButton onPress={() => toggleFavorite(item)} bg={favorite ? colors.dangerSoft : colors.card}>
+              <Ionicons name={favorite ? "heart" : "heart-outline"} size={20} color={favorite ? colors.danger : colors.text} />
             </IconButton>
           </View>
           <View style={{ alignItems: "center", paddingVertical: 24 }}>
-            <Text style={{ fontSize: 120 }}>{item.emoji}</Text>
+            {displayImage ? (
+              <Image
+                source={{ uri: displayImage }}
+                style={{ width: 220, height: 220, borderRadius: radius.lg }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={{ fontSize: 120 }}>{displayEmoji}</Text>
+            )}
           </View>
         </LinearGradient>
 

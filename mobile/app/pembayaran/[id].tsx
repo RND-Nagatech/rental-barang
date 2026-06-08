@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,23 +10,41 @@ import { Button, IconButton } from "@/components/Button";
 import { Card, Row } from "@/components/Card";
 import { PayStatusBadge } from "@/components/Badge";
 import { useCart } from "@/store/CartContext";
-
-const methods = [
-  { id: "transfer", nama: "Transfer Bank", sub: "BCA, Mandiri, BNI", icon: "card-outline" as const },
-  { id: "qris", nama: "QRIS", sub: "Scan & bayar instan", icon: "qr-code-outline" as const },
-  { id: "ewallet", nama: "E-Wallet", sub: "GoPay, OVO, DANA", icon: "wallet-outline" as const },
-  { id: "cod", nama: "Bayar di Toko", sub: "Tunai saat ambil barang", icon: "storefront-outline" as const },
-];
+import { mobileApi, type CustomerPaymentMethod } from "@/lib/api";
+import { PaymentMethodCard } from "@/components/PaymentMethodCard";
 
 export default function Pembayaran() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { bookings, payBooking } = useCart();
   const booking = bookings.find((b) => b.id === id);
-  const [method, setMethod] = useState("transfer");
+  const [methods, setMethods] = useState<CustomerPaymentMethod[]>([]);
+  const [method, setMethod] = useState("");
   const [scheme, setScheme] = useState<"dp" | "full">("dp");
   const [paid, setPaid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingMethods, setLoadingMethods] = useState(true);
+  const [methodError, setMethodError] = useState("");
+
+  const loadMethods = useCallback(async () => {
+    setLoadingMethods(true);
+    setMethodError("");
+    try {
+      const response = await mobileApi.getCustomerPaymentMethods();
+      const items = response.data.items || [];
+      setMethods(items);
+      setMethod((current) => current || items[0]?.kode_metode || "");
+    } catch (error) {
+      setMethods([]);
+      setMethodError(error instanceof Error ? error.message : "Metode pembayaran toko belum bisa dimuat.");
+    } finally {
+      setLoadingMethods(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMethods();
+  }, [loadMethods]);
 
   if (!booking) {
     return (
@@ -40,16 +58,24 @@ export default function Pembayaran() {
   const sisa = Math.max(0, grandTotal - booking.terbayar);
   const dpAmount = Math.round(booking.total * 0.5);
   const payAmount = Math.min(sisa, scheme === "dp" ? dpAmount : sisa);
+  const selectedMethod = useMemo(
+    () => methods.find((item) => item.kode_metode === method) || methods[0],
+    [method, methods],
+  );
 
   async function handlePay() {
     if (payAmount <= 0) {
       Alert.alert("Sudah lunas", "Tidak ada sisa tagihan untuk pesanan ini.");
       return;
     }
+    if (!selectedMethod) {
+      Alert.alert("Metode pembayaran belum tersedia", "Admin belum menambahkan metode pembayaran toko.");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      await payBooking(booking!.id, payAmount, scheme === "full", method);
+      await payBooking(booking!.id, payAmount, scheme === "full", selectedMethod.nama_metode);
       setPaid(true);
     } catch (error) {
       Alert.alert("Pembayaran gagal", error instanceof Error ? error.message : "Coba lagi beberapa saat.");
@@ -71,7 +97,7 @@ export default function Pembayaran() {
           </Text>
           <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: radius.md, padding: 16, width: "100%", marginTop: 8 }}>
             <RowLight label="Dibayar" value={formatRupiah(payAmount)} />
-            <RowLight label="Metode" value={methods.find((m) => m.id === method)?.nama ?? "-"} />
+            <RowLight label="Metode" value={selectedMethod?.nama_metode ?? "-"} />
             <RowLight label="Status" value={scheme === "full" ? "Lunas" : "DP"} />
           </View>
           <View style={{ width: "100%", gap: 10, marginTop: 12 }}>
@@ -115,34 +141,30 @@ export default function Pembayaran() {
 
         <Text style={{ fontWeight: "900", color: colors.text, marginBottom: 10 }}>Metode Pembayaran</Text>
         <View style={{ gap: 10 }}>
-          {methods.map((m) => {
-            const on = method === m.id;
-            return (
-              <Pressable
-                key={m.id}
-                onPress={() => setMethod(m.id)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  backgroundColor: colors.card,
-                  borderRadius: radius.md,
-                  padding: 14,
-                  borderWidth: 1.5,
-                  borderColor: on ? colors.primary : colors.border,
-                }}
-              >
-                <View style={{ width: 42, height: 42, borderRadius: radius.sm, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name={m.icon} size={22} color={colors.primaryDark} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: "800", color: colors.text }}>{m.nama}</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>{m.sub}</Text>
-                </View>
-                <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={22} color={on ? colors.primary : colors.textFaint} />
-              </Pressable>
-            );
-          })}
+          {loadingMethods ? (
+            <Text style={{ color: colors.textMuted, paddingVertical: 10 }}>Memuat metode pembayaran...</Text>
+          ) : methodError ? (
+            <Pressable
+              onPress={loadMethods}
+              style={{ backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 14 }}
+            >
+              <Text style={{ color: colors.danger, fontWeight: "800" }}>{methodError}</Text>
+              <Text style={{ color: colors.danger, marginTop: 4 }}>Tap untuk coba lagi.</Text>
+            </Pressable>
+          ) : methods.length === 0 ? (
+            <View style={{ backgroundColor: colors.card, borderRadius: radius.md, padding: 14 }}>
+              <Text style={{ color: colors.textMuted }}>Metode pembayaran toko belum tersedia.</Text>
+            </View>
+          ) : (
+            methods.map((item) => (
+              <PaymentMethodCard
+                key={item.id || item.kode_metode}
+                method={item}
+                selected={method === item.kode_metode}
+                onPress={() => setMethod(item.kode_metode)}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -171,7 +193,7 @@ export default function Pembayaran() {
         <View style={{ flex: 1 }}>
           <Button
             label={submitting ? "Mencatat Pembayaran..." : "Bayar Sekarang"}
-            disabled={submitting || payAmount <= 0}
+            disabled={submitting || payAmount <= 0 || !selectedMethod}
             onPress={handlePay}
             icon={<Ionicons name="lock-closed" size={16} color={colors.white} />}
           />

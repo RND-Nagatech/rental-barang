@@ -38,6 +38,7 @@ export const navGroups: NavGroup[] = [
       { title: "Kategori", url: "/kategori", icon: Tags },
       { title: "Barang", url: "/barang", icon: Package },
       { title: "Customer", url: "/customer", icon: Users },
+      { title: "Metode Pembayaran", url: "/metode-pembayaran", icon: Wallet },
     ],
   },
   {
